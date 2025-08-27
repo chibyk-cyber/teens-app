@@ -206,7 +206,7 @@ st.markdown(
     """
     <style>
     .stApp {
-        background: url("https://i.imgur.com/Vh7yE7m.jpeg");
+        background: url("https://i.imgur.com/BkQXsgc.jpeg");
         background-size: cover;
     }
     </style>
@@ -230,3 +230,4 @@ elif menu == "Exam Questions":
     exam_section()
 elif menu == "Bible":
     bible_section()
+
