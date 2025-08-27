@@ -10,7 +10,7 @@ import requests
 page_bg = """
 <style>
 .stApp {
-    background-image: url("");
+    background-image: url("https://i.imgur.com/gny6JlY.jpeg");
     background-size: cover;
     background-attachment: fixed;
 }
@@ -218,5 +218,6 @@ elif choice == "Bible":
     bible_section()
 elif choice == "Social Media":
     social_media_section()
+
 
 
