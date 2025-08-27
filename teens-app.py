@@ -1,4 +1,4 @@
-# app.py
+
 import streamlit as st
 import sqlite3
 from datetime import datetime, date, time
@@ -491,3 +491,4 @@ PAGES = {
 st.sidebar.title("📌 Teens App")
 choice = st.sidebar.radio("Navigate", list(PAGES.keys()))
 PAGES[choice]()
+
