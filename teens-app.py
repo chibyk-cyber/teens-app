@@ -218,3 +218,4 @@ elif choice == "Bible":
     bible_section()
 elif choice == "Social Media":
     social_media_section()
+
