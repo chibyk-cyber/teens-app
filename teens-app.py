@@ -8,7 +8,7 @@ import random
 page_bg_img = f"""
 <style>
 .stApp {{
-    background-image: url("https://i.imgur.com/mTqfIzb.jpeg");
+    background-image: url("https://imgur.com/a/OuRIfwF");
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
@@ -211,3 +211,4 @@ PAGES = {
 
 choice = st.sidebar.radio("📌 Navigate", list(PAGES.keys()))
 PAGES[choice]()
+
