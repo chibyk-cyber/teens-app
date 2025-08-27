@@ -7,23 +7,28 @@ import json
 import requests
 
 # ---------------- CUSTOM STYLING ----------------
+
 page_bg = """
 <style>
 .stApp {
-    background-image: url("https://i.imgur.com/gny6JlY.jpeg");
+    background-image: url("https://i.imgur.com/F6x5dWq.jpeg"); /* your background */
     background-size: cover;
     background-attachment: fixed;
 }
 
 h1, h2, h3, h4, h5, h6, p, div, span, label {
-    color: white !important;
-    text-shadow: 1px 1px 2px black;
+    color: #00FF00 !important;  /* neon green */
+    text-shadow: 1px 1px 2px black; /* readability */
 }
 
 textarea, input, .stTextInput, .stTextArea, .stSelectbox, .stMultiSelect {
     background-color: rgba(0,0,0,0.6) !important;
-    color: white !important;
+    color: #00FF00 !important;  /* green text in inputs */
 }
+</style>
+"""
+st.markdown(page_bg, unsafe_allow_html=True)
+page_bg = """
 </style>
 """
 st.markdown(page_bg, unsafe_allow_html=True)
@@ -218,6 +223,7 @@ elif choice == "Bible":
     bible_section()
 elif choice == "Social Media":
     social_media_section()
+
 
 
 
