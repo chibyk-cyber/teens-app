@@ -7,11 +7,10 @@ import json
 import requests
 
 # ---------------- CUSTOM STYLING ----------------
-# ---------------- CUSTOM STYLING ----------------
 page_bg = """
 <style>
 .stApp {
-    background-color: skyblue;  /* sky blue background */
+    background-color: #121212;  /* very dark gray background */
     background-size: cover;
     background-attachment: fixed;
 }
@@ -23,11 +22,12 @@ h1, h2, h3, h4, h5, h6, p, div, span, label {
 
 textarea, input, .stTextInput, .stTextArea, .stSelectbox, .stMultiSelect {
     background-color: rgba(0,0,0,0.6) !important;
-    color: #00FF00 !important;  /* green text in inputs */
+    color: #00FF00 !important;  /* green text inside inputs */
 }
 </style>
 """
 st.markdown(page_bg, unsafe_allow_html=True)
+
 
 
 # ---------------- STUDY MATERIALS ----------------
@@ -201,6 +201,7 @@ elif choice == "Bible":
     bible_section()
 elif choice == "Social Media":
     social_media_section()
+
 
 
 
