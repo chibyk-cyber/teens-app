@@ -7,17 +7,17 @@ import json
 import requests
 
 # ---------------- CUSTOM STYLING ----------------
-
+# ---------------- CUSTOM STYLING ----------------
 page_bg = """
 <style>
 .stApp {
-    background-image: url("https://i.imgur.com/F6x5dWq.jpeg"); /* your background */
+    background-color: skyblue;  /* sky blue background */
     background-size: cover;
     background-attachment: fixed;
 }
 
 h1, h2, h3, h4, h5, h6, p, div, span, label {
-    color: #00FF00 !important;  /* neon green */
+    color: #00FF00 !important;  /* neon green text */
     text-shadow: 1px 1px 2px black; /* readability */
 }
 
@@ -28,29 +28,7 @@ textarea, input, .stTextInput, .stTextArea, .stSelectbox, .stMultiSelect {
 </style>
 """
 st.markdown(page_bg, unsafe_allow_html=True)
-page_bg = """
-</style>
-"""
-st.markdown(page_bg, unsafe_allow_html=True)
 
-# ---------------- DATABASE SETUP ----------------
-conn = sqlite3.connect("teens_app.db")
-c = conn.cursor()
-
-c.execute("""CREATE TABLE IF NOT EXISTS notes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT,
-    content TEXT,
-    created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)""")
-
-c.execute("""CREATE TABLE IF NOT EXISTS schedule (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task TEXT,
-    date DATE,
-    time TIME
-)""")
-conn.commit()
 
 # ---------------- STUDY MATERIALS ----------------
 study_materials = {
@@ -223,6 +201,7 @@ elif choice == "Bible":
     bible_section()
 elif choice == "Social Media":
     social_media_section()
+
 
 
 
