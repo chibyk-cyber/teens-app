@@ -65,8 +65,8 @@ st.markdown(BASE_CSS, unsafe_allow_html=True)
 # -------------------------
 if "supabase" not in st.session_state:
     try:
-        supa_url = st.secrets["supabase"]["https://vkvwxnnirqtkwfhuskvo.supabase.co"]
-        supa_key = st.secrets["supabase"]["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZrdnd4bm5pcnF0a3dmaHVza3ZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYzMDAzMTcsImV4cCI6MjA3MTg3NjMxN30.-yAV2mYDcesXM5wncmbcq1GlpD60q32lx6pe1bPDKfg"]
+        supa_url = st.secrets["supabase"]["url"]
+        supa_key = st.secrets["supabase"]["key"]
         st.session_state["supabase"] = create_client(supa_url, supa_key)
     except Exception as e:
         st.error("Supabase credentials not found in st.secrets. Add them to .streamlit/secrets.toml or your host's secrets.")
@@ -661,5 +661,6 @@ if page_func:
     page_func()
 else:
     st.info("Select a page")
+
 
 
