@@ -11,6 +11,57 @@ import json
 import os
 from supabase import create_client, Client
 
+SIDEBAR_CSS = """
+<style>
+/* Sidebar background */
+[data-testid="stSidebar"] {
+    background-color: #1A1A1A !important;
+    border-right: 2px solid #87CEEB;
+    padding-top: 20px;
+}
+
+/* Sidebar title */
+[data-testid="stSidebar"] .css-10trblm {
+    font-size: 22px !important;
+    font-weight: 700 !important;
+    color: #87CEEB !important;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+/* Sidebar radio buttons / navigation items */
+[data-testid="stSidebar"] .stRadio button, [data-testid="stSidebar"] .stRadio label {
+    color: #E0E0E0 !important;
+    font-weight: 600;
+}
+[data-testid="stSidebar"] .stRadio button:hover, [data-testid="stSidebar"] .stRadio label:hover {
+    color: #87CEEB !important;
+}
+
+/* Sidebar inputs */
+[data-testid="stSidebar"] input, [data-testid="stSidebar"] textarea {
+    background-color: rgba(255,255,255,0.05) !important;
+    color: #E0E0E0 !important;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    padding: 5px;
+}
+
+/* Sidebar buttons */
+[data-testid="stSidebar"] .stButton>button {
+    background-color: #87CEEB !important;
+    color: #121212 !important;
+    border-radius: 8px;
+    font-weight: 600;
+    margin-top: 8px;
+}
+[data-testid="stSidebar"] .stButton>button:hover {
+    background-color: #00BFFF !important;
+}
+</style>
+"""
+st.markdown(SIDEBAR_CSS, unsafe_allow_html=True)
+
 # -------------------------
 # CONFIG & STYLING
 # -------------------------
@@ -312,3 +363,4 @@ st.markdown(f"### Logged in: {get_my_profile().get('username') if st.session_sta
 page_func=PAGES.get(selection)
 if page_func: page_func()
 else: st.info("Select a page")
+
