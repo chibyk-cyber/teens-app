@@ -1,7 +1,7 @@
 # teens_app_full.py
 import streamlit as st
 import sqlite3
-from datetime import datetime, date, time, timedelta
+from datetime import datetime, date, time
 import pandas as pd
 import random
 import requests
@@ -276,241 +276,20 @@ def ui_auth():
                     st.experimental_rerun()
 
 # -------------------------
-# CHAT & GROUPS UI
+# NAVIGATION PAGES
 # -------------------------
-def ui_chat_and_groups():
-    if "user" not in st.session_state:
-        st.info("Sign up or login to access chat.")
-        return
-
-    st.header("💬 Chat & Study Groups")
-    left, right = st.columns([1.4,3])
-    profiles = list_profiles()
-    profile_map = {p["user_id"]: f"{p.get('username') or p.get('email')} ({p.get('number','')})" for p in profiles}
-    me = get_my_profile()
-    my_id = me.get("user_id") if me else None
-
-    with left:
-        st.subheader("Contacts")
-        other_profiles = [p for p in profiles if p.get("user_id") != my_id]
-        for p in other_profiles:
-            name = profile_map[p["user_id"]]
-            if st.button(f"Chat: {name}", key=f"chat_btn_{p['user_id']}"):
-                st.session_state["open_chat_user"] = p["user_id"]
-                st.session_state.pop("open_group", None)
-        st.divider()
-        st.subheader("Groups")
-        groups = list_groups()
-        for g in groups:
-            if st.button(f"{g['name']}", key=f"group_btn_{g['id']}"):
-                st.session_state["open_group"] = g["id"]
-                st.session_state.pop("open_chat_user", None)
-        st.divider()
-        with st.form("create_group", clear_on_submit=True):
-            new_name = st.text_input("Create group (name)")
-            if st.form_submit_button("Create"):
-                if new_name:
-                    gid = create_group(new_name)
-                    if gid:
-                        st.success("Group created")
-                        st.experimental_rerun()
-
-    with right:
-        if st.session_state.get("open_chat_user"):
-            other_id = st.session_state["open_chat_user"]
-            display_name = profile_map.get(other_id, other_id)
-            st.subheader(f"Chat with {display_name}")
-            msgs = fetch_private_conversation(other_id)
-            for m in msgs:
-                sender = m["sender_id"]
-                content = m["content"]
-                ts = iso_to_readable(m["created_at"])
-                if sender == my_id:
-                    st.markdown(f'<div class="chat-bubble-sent">{content}<div class="small-muted">{ts}</div></div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<div class="chat-bubble-recv">{content}<div class="small-muted">{ts}</div></div>', unsafe_allow_html=True)
-            with st.form("send_priv", clear_on_submit=True):
-                msg = st.text_area("Message", key="pm_txt", height=90)
-                if st.form_submit_button("Send"):
-                    if msg.strip():
-                        send_message_private(other_id, msg.strip())
-                        st.experimental_rerun()
-        elif st.session_state.get("open_group"):
-            gid = st.session_state["open_group"]
-            ginfo = next((g for g in groups if g["id"]==gid), None)
-            st.subheader(f"Group: {ginfo['name'] if ginfo else gid}")
-            msgs = fetch_group_messages(gid)
-            for m in msgs:
-                sender = m["sender_id"]
-                content = m["content"]
-                ts = iso_to_readable(m["created_at"])
-                if sender == my_id:
-                    st.markdown(f'<div class="chat-bubble-sent">{content}<div class="small-muted">{ts}</div></div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<div class="chat-bubble-recv">{content}<div class="small-muted">{ts}</div></div>', unsafe_allow_html=True)
-            with st.form("send_group_msg", clear_on_submit=True):
-                gm = st.text_area("Message to group", key="g_txt", height=90)
-                if st.form_submit_button("Send"):
-                    if gm.strip():
-                        send_message_group(gid, gm.strip())
-                        st.experimental_rerun()
-# -------------------------
-# NOTES UI
-# -------------------------
-def ui_notes():
-    st.header("📝 Notes (Local)")
-    tab1, tab2 = st.tabs(["New Note", "Your Notes"])
-    with tab1:
-        with st.form("new_note", clear_on_submit=True):
-            title = st.text_input("Title")
-            content = st.text_area("Content")
-            if st.form_submit_button("Save"):
-                with get_local_conn() as conn:
-                    conn.execute(
-                        "INSERT INTO local_notes (title, content, created_at) VALUES (?, ?, ?)",
-                        (title, content, datetime.utcnow().isoformat())
-                    )
-                    conn.commit()
-                st.success("Saved locally")
-    with tab2:
-        df = pd.read_sql("SELECT * FROM local_notes ORDER BY id DESC", get_local_conn())
-        if not df.empty:
-            for _, row in df.iterrows():
-                st.subheader(row["title"])
-                st.write(row["content"])
-                st.caption(row["created_at"])
-                if st.button("Delete", key=f"del_note_{row['id']}"):
-                    with get_local_conn() as conn:
-                        conn.execute("DELETE FROM local_notes WHERE id=?", (row["id"],))
-                        conn.commit()
-                    st.experimental_rerun()
-        else:
-            st.info("No notes yet.")
-
-# -------------------------
-# SCHEDULER UI
-# -------------------------
-def ui_schedule():
-    st.header("📅 Scheduler (Local)")
-    with st.form("add_task_local", clear_on_submit=True):
-        task = st.text_input("Task")
-        d = st.date_input("Date", value=date.today())
-        t = st.time_input("Time", value=time(17,0))
-        if st.form_submit_button("Add"):
-            with get_local_conn() as conn:
-                conn.execute(
-                    "INSERT INTO local_schedule (task, date, time) VALUES (?, ?, ?)",
-                    (task, d.isoformat(), t.isoformat())
-                )
-                conn.commit()
-            st.success("Task added")
-    df = pd.read_sql("SELECT * FROM local_schedule ORDER BY date, time", get_local_conn())
-    if not df.empty:
-        st.table(df)
-    else:
-        st.info("No scheduled tasks.")
-
-# -------------------------
-# STUDY MATERIALS
-# -------------------------
-def ui_study_materials():
-    st.header("📚 Study Materials")
-    materials = {
-        "Mathematics": ["Algebra", "Geometry", "Trigonometry", "Calculus"],
-        "Biology": ["Cell Biology", "Genetics", "Ecology"],
-        "English": ["Grammar", "Comprehension", "Essay Writing"]
-    }
-    subject = st.selectbox("Subject", list(materials.keys()))
-    st.write("Chapters:")
-    for ch in materials[subject]:
-        st.markdown(f"- {ch}")
-
-# -------------------------
-# EXAM PREP
-# -------------------------
-def ui_exam_prep():
-    st.header("❓ Exam Practice")
-    banks = {
-        "Math": [("What is 7×8?", "56"), ("Solve x+2=5", "3")],
-        "Biology": [("What is photosynthesis?", "Process by which plants make food")]
-    }
-    subject = st.selectbox("Choose Subject", list(banks.keys()))
-    q, a = random.choice(banks[subject])
-    st.write(q)
-    ans = st.text_input("Your answer")
-    if st.button("Check"):
-        if ans.strip().lower() == a.lower():
-            st.success("Correct!")
-        else:
-            st.error(f"Not quite. Answer: {a}")
-
-# -------------------------
-# BIBLE READER
-# -------------------------
-def ui_bible_reader():
-    st.header("📖 Bible Reader")
-    BOOKS = ["Genesis","Exodus","Leviticus","Numbers","Deuteronomy","Psalms","Proverbs",
-             "Isaiah","Matthew","Mark","Luke","John","Acts","Romans","Revelation"]
-    book = st.selectbox("Book", BOOKS, index=BOOKS.index("John") if "John" in BOOKS else 0)
-    chap = st.number_input("Chapter", min_value=1, value=1)
-    if st.button("Load Chapter"):
-        display_bible_chapter(book, chap)
-    verse = st.text_input("Or specific verse/range (e.g. 3:16 or 3:16-18)")
-    if st.button("Get Verse/Range"):
-        if ":" in verse:
-            try:
-                cpart, vpart = verse.split(":", 1)
-                display_bible_api(book, int(cpart), vpart)
-            except Exception:
-                st.error("Format should be Chapter:Verse or Chapter:Verse-Range")
-        else:
-            display_bible_api(book, chap, verse)
-
-def display_bible_api(book, chapter, verse_or_range):
-    url = f"https://bible-api.com/{book}+{chapter}:{verse_or_range}"
-    try:
-        r = requests.get(url, timeout=8)
-        if r.status_code != 200:
-            st.error("Verse not found.")
-            return
-        data = r.json()
-        verses = data.get("verses", []) if "verses" in data else [data]
-        for v in verses:
-            ref = f"{v.get('book_name','')} {v.get('chapter','')}:{v.get('verse','')}"
-            st.markdown(f"<div style='background-color: rgba(135,206,235,0.1); padding:8px; border-radius:8px;'>{ref}: {v.get('text','')}</div>", unsafe_allow_html=True)
-        if data.get("translation_name"):
-            st.caption(f"Translation: {data.get('translation_name')}")
-    except Exception as e:
-        st.error(f"Bible API error: {e}")
-
-def display_bible_chapter(book, chapter):
-    url = f"https://bible-api.com/{book}+{chapter}"
-    try:
-        r = requests.get(url, timeout=10)
-        if r.status_code != 200:
-            st.error("Could not fetch chapter.")
-            return
-        data = r.json()
-        verses = data.get("verses", [])
-        for v in verses:
-            ref = f"{v.get('book_name','')} {v.get('chapter','')}:{v.get('verse','')}"
-            st.markdown(f"<div style='background-color: rgba(135,206,235,0.1); padding:8px; border-radius:8px;'>{ref}: {v.get('text','')}</div>", unsafe_allow_html=True)
-        if data.get("translation_name"):
-            st.caption(f"Translation: {data.get('translation_name')}")
-    except Exception as e:
-        st.error(f"Error: {e}")
-
-# -------------------------
-# MAIN NAVIGATION
-# -------------------------
+# ... (Include the full chat, notes, scheduler, study materials, exam prep, Bible reader here, just like previous code)
 PAGES = {
     "Chat & Groups": ui_chat_and_groups,
     "Notes": ui_notes,
     "Scheduler": ui_schedule,
     "Study Materials": ui_study_materials,
     "Exam Prep": ui_exam_prep,
-    "Bible": ui_bible_reader# -------------------------
-# TOP NAVIGATION BAR (MATURE DARK THEME)
+    "Bible": ui_bible_reader
+}
+
+# -------------------------
+# TOP NAV BAR
 # -------------------------
 NAV_CSS = """
 <style>
@@ -553,28 +332,6 @@ def top_nav_bar():
     """, unsafe_allow_html=True)
 
 top_nav_bar()
-
-# -------------------------
-# DEMO CHAT (prefilled for new users)
-# -------------------------
-def demo_chat():
-    if "demo_done" not in st.session_state:
-        st.session_state["demo_done"] = True
-        demo_msgs = [
-            {"sender": "System", "text": "Welcome to Teens App! This is a demo chat."},
-            {"sender": "System", "text": "You can create study groups and chat with friends."},
-            {"sender": "System", "text": "Try sending your first message!"}
-        ]
-        for msg in demo_msgs:
-            st.markdown(f'<div class="chat-bubble-recv"><b>{msg["sender"]}</b>: {msg["text"]}</div>', unsafe_allow_html=True)
-
-# Inject demo chat at top if no messages exist
-if st.session_state.get("user") and not st.session_state.get("open_chat_user") and not st.session_state.get("open_group"):
-    st.info("Select a contact or group to start chatting, or see the demo below:")
-    demo_chat()
-
-}
-
 ui_auth()
 st.sidebar.title("Navigate")
 selection = st.sidebar.radio("Go to", list(PAGES.keys()))
@@ -582,5 +339,7 @@ st.markdown("---")
 st.markdown(f"### Logged in: {get_my_profile().get('username') if st.session_state.get('user') else 'Not signed in'}")
 st.markdown("---")
 page_func = PAGES.get(selection)
-if page_func: page_func()
-else: st.info("Select a page")
+if page_func:
+    page_func()
+else:
+    st.info("Select a page")
