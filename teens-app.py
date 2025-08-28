@@ -279,6 +279,97 @@ def ui_auth():
 # NAVIGATION PAGES
 # -------------------------
 # ... (Include the full chat, notes, scheduler, study materials, exam prep, Bible reader here, just like previous code)
+
+# -------------------------
+# MAIN NAVIGATION
+# -------------------------
+PAGES = {
+    "Chat & Groups": ui_chat_and_groups,
+    "Notes": ui_notes,
+    "Scheduler": ui_schedule,
+    "Study Materials": ui_study_materials,
+    "Exam Prep": ui_exam_prep,
+    "Bible": ui_bible_reader,  # -------------------------
+}
+
+# TOP NAVIGATION BAR (MATURE DARK THEME)
+# -------------------------
+NAV_CSS = """
+<style>
+.top-nav {
+  background-color: #1E1E1E;
+  padding: 10px;
+  border-bottom: 1px solid #333;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.top-nav h2 {
+  color: #87CEEB;
+  margin: 0;
+}
+.top-nav button {
+  background-color: #87CEEB;
+  color: #000;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.top-nav button:hover {
+  background-color: #00BFFF;
+}
+</style>
+"""
+st.markdown(NAV_CSS, unsafe_allow_html=True)
+
+def top_nav_bar():
+    st.markdown("""
+    <div class="top-nav">
+        <h2>Teens App</h2>
+        <div>
+            <button onclick="window.location.reload();">Refresh</button>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+top_nav_bar()
+
+# -------------------------
+# DEMO CHAT (prefilled for new users)
+# -------------------------
+def demo_chat():
+    if "demo_done" not in st.session_state:
+        st.session_state["demo_done"] = True
+        demo_msgs = [
+            {"sender": "System", "text": "Welcome to Teens App! This is a demo chat."},
+            {"sender": "System", "text": "You can create study groups and chat with friends."},
+            {"sender": "System", "text": "Try sending your first message!"}
+        ]
+        for msg in demo_msgs:
+            st.markdown(f'<div class="chat-bubble-recv"><b>{msg["sender"]}</b>: {msg["text"]}</div>', unsafe_allow_html=True)
+
+# Inject demo chat at top if no messages exist
+if st.session_state.get("user") and not st.session_state.get("open_chat_user") and not st.session_state.get("open_group"):
+    st.info("Select a contact or group to start chatting, or see the demo below:")
+    demo_chat()
+
+# -------------------------
+# RUN APP
+# -------------------------
+ui_auth()
+st.sidebar.title("Navigate")
+selection = st.sidebar.radio("Go to", list(PAGES.keys()))
+st.markdown("---")
+st.markdown(f"### Logged in: {get_my_profile().get('username') if st.session_state.get('user') else 'Not signed in'}")
+st.markdown("---")
+page_func = PAGES.get(selection)
+if page_func: 
+    page_func()
+else: 
+    st.info("Select a page")
+
 PAGES = {
     "Chat & Groups": ui_chat_and_groups,
     "Notes": ui_notes,
@@ -343,3 +434,4 @@ if page_func:
     page_func()
 else:
     st.info("Select a page")
+
