@@ -471,7 +471,7 @@ def bible_reader_page():
             else:
                 verse_text = "The Lord bless you and keep you; the Lord make his face shine on you and be gracious to you. - Numbers 6:24-25"
             
-            st.markdown(f'<div class="card"><h3>{selected_book} {chapter}:{verse}</h3><p>{verse_text</p></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="card"><h3>{selected_book} {chapter}:{verse}</h3><p>{verse_text}</p></div>', unsafe_allow_html=True)
             
             if st.button("❤️ Add to Favorites"):
                 st.success("Verse added to favorites!")
@@ -915,3 +915,4 @@ def main():
 # This should be the very last line of your file
 if __name__ == "__main__":
     main()
+
