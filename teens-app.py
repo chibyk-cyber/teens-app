@@ -849,3 +849,42 @@ def profile_page():
         
         if st.button("Update Profile"):
             # Update in Supabase
+            
+        if st.button("Update Profile"):
+            # Update in Supabase if available
+            if supabase_client and 'id' in st.session_state.profile:
+                try:
+                    supabase_client.table("profiles").update({
+                        "username": new_username
+                    }).eq("id", st.session_state.profile['id']).execute()
+                except Exception as e:
+                    st.error(f"Error updating profile: {str(e)}")
+            
+            # Update in session state
+            st.session_state.profile['username'] = new_username
+            st.success("Profile updated successfully!")
+            time.sleep(1)
+            st.experimental_rerun()
+
+with col2:
+    st.subheader("Your Stats")
+    
+    col21, col22, col23 = st.columns(3)
+    with col21:
+        st.markdown('<div class="card"><h3>5</h3><p>Friends</p></div>', unsafe_allow_html=True)
+    with col22:
+        st.markdown('<div class="card"><h3>12</h3><p>Devotionals</p></div>', unsafe_allow_html=True)
+    with col23:
+        st.markdown('<div class="card"><h3>350</h3><p>Points</p></div>', unsafe_allow_html=True)
+    
+    st.subheader("Study Progress")
+    st.write("📊 Mathematics: 75% complete")
+    st.write("📊 English: 60% complete")
+    st.write("📊 Biology: 85% complete")
+    st.write("📊 Physics: 50% complete")
+    
+    st.subheader("Achievements")
+    st.write("🏆 Bible Scholar (Read 50 verses)")
+    st.write("🏆 Math Whiz (Solved 100 problems)")
+    st.write("🏆 Study Buddy (Joined 3 groups)")
+
