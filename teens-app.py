@@ -1,237 +1,497 @@
+# teens_app_full.py
 import streamlit as st
+import sqlite3
+from datetime import datetime, date, time
+import pandas as pd
+import random
+import requests
 from supabase import create_client, Client
-from datetime import datetime
 
-# -----------------------------
-# Supabase Setup
-# -----------------------------
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# -------------------------
+# CONFIG / STYLING
+# -------------------------
+st.set_page_config(page_title="Teens App", layout="wide", page_icon="✨")
+CSS = """
+<style>
+html, body, [class*="css"] { background-color:#121212 !important; color:#E8F6F9 !important; }
+.stApp { background-color:#121212; }
+h1,h2,h3,h4,h5,h6 { color:#BEEAF9 !important; }
+.stButton>button { background-color:#87CEEB!important; color:#000!important; font-weight:600; border-radius:8px; }
+input, textarea, .stTextInput>div>div, .stTextArea>div>div { background-color: rgba(255,255,255,0.03)!important; color:#E8F6F9!important; border:1px solid rgba(255,255,255,0.04)!important; }
+.chat-bubble-sent { background-color:#87CEEB; color:#000; padding:10px; border-radius:12px; margin:6px 0; max-width:78%; margin-left:auto; }
+.chat-bubble-recv { background-color:#1F1F1F; color:#E8F6F9; padding:10px; border-radius:12px; margin:6px 0; max-width:78%; }
+.small-muted { color:#A0A0A0; font-size:12px; }
+.top-nav { background-color:#121212; padding:10px; border-bottom:1px solid #222; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.top-nav h2 { color:#87CEEB; margin:0; }
+</style>
+"""
+st.markdown(CSS, unsafe_allow_html=True)
 
-# -----------------------------
-# Authentication
-# -----------------------------
-def ui_auth():
-    st.title("🔑 Authentication")
+# -------------------------
+# SUPABASE CLIENT (secrets)
+# -------------------------
+# Put your Supabase credentials in .streamlit/secrets.toml as:
+# [supabase]
+# url = "https://....supabase.co"
+# key = "your-anon-or-service-key"
+try:
+    supa = st.secrets["supabase"]
+    SUPA_URL = supa["url"]
+    SUPA_KEY = supa["key"]
+except Exception:
+    st.error("Add Supabase credentials to .streamlit/secrets.toml under [supabase] (url & key).")
+    st.stop()
 
-    auth_choice = st.radio("Choose Action", ["Sign In", "Sign Up"])
+if "supabase" not in st.session_state:
+    st.session_state["supabase"] = create_client(SUPA_URL, SUPA_KEY)
+supabase: Client = st.session_state["supabase"]
 
-    email = st.text_input("Email")
-    password = st.text_input("Password", type="password")
+# -------------------------
+# LOCAL SQLITE (notes & schedule)
+# -------------------------
+LOCAL_DB = "teens_local.db"
+def get_local_conn():
+    c = sqlite3.connect(LOCAL_DB, check_same_thread=False)
+    c.row_factory = sqlite3.Row
+    return c
 
-    if auth_choice == "Sign Up":
-        if st.button("Sign Up"):
+def init_local_db():
+    with get_local_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""CREATE TABLE IF NOT EXISTS local_notes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        title TEXT,
+                        content TEXT,
+                        created_at TEXT)""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS local_schedule (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        task TEXT,
+                        date TEXT,
+                        time TEXT)""")
+        conn.commit()
+init_local_db()
+
+# -------------------------
+# SUPABASE HELPERS
+# -------------------------
+def generate_user_number():
+    # generate a 4-6 digit number
+    return str(random.randint(1000, 999999))
+
+def signup_user(email: str, password: str, username: str = None):
+    """Sign up user and create a profile with a numeric ID."""
+    try:
+        res = supabase.auth.sign_up({"email": email, "password": password})
+        user = getattr(res, "user", None) or (res.get("user") if isinstance(res, dict) else None)
+        if user:
+            # create profile row
+            number = generate_user_number()
+            # try a few times if unique constraint fails
+            for _ in range(6):
+                try:
+                    supabase.table("profiles").insert({
+                        "user_id": user["id"],
+                        "email": email,
+                        "username": username or email.split("@")[0],
+                        "number": number
+                    }).execute()
+                    break
+                except Exception:
+                    number = generate_user_number()
+        return res
+    except Exception as e:
+        return {"error": str(e)}
+
+def login_user(email: str, password: str):
+    try:
+        res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        user = getattr(res, "user", None) or (res.get("user") if isinstance(res, dict) else None)
+        session = getattr(res, "session", None) or (res.get("session") if isinstance(res, dict) else None)
+        if user:
+            st.session_state["user"] = user
+            if session and session.get("access_token"):
+                st.session_state["access_token"] = session["access_token"]
+            return {"user": user}
+        return {"error": "Login failed"}
+    except Exception as e:
+        return {"error": str(e)}
+
+def get_profile_by_user_id(user_id: str):
+    try:
+        r = supabase.table("profiles").select("*").eq("user_id", user_id).single().execute()
+        return r.data
+    except Exception:
+        return None
+
+def get_profile_by_number(number: str):
+    try:
+        r = supabase.table("profiles").select("*").eq("number", number).single().execute()
+        return r.data
+    except Exception:
+        return None
+
+def list_profiles(limit=200):
+    try:
+        r = supabase.table("profiles").select("user_id,email,username,number").limit(limit).execute()
+        return r.data or []
+    except Exception:
+        return []
+
+# messaging helpers use chat_key field (private: sorted user ids joined; group: group name)
+def send_message(chat_key: str, sender_id: str, content: str):
+    try:
+        supabase.table("messages").insert({
+            "chat_key": chat_key,
+            "sender_id": sender_id,
+            "content": content
+        }).execute()
+        return True
+    except Exception:
+        return False
+
+def fetch_messages(chat_key: str, limit=500):
+    try:
+        r = supabase.table("messages").select("*").eq("chat_key", chat_key).order("created_at", desc=False).limit(limit).execute()
+        return r.data or []
+    except Exception:
+        return []
+
+# -------------------------
+# BIBLE API
+# -------------------------
+def fetch_bible_chapter(book: str, chapter: int):
+    url = f"https://bible-api.com/{book}+{chapter}"
+    try:
+        r = requests.get(url, timeout=8)
+        if r.status_code != 200:
+            return None
+        return r.json()
+    except Exception:
+        return None
+
+# -------------------------
+# UI: Top nav + demo helper
+# -------------------------
+def top_nav_bar():
+    st.markdown("""
+    <div class="top-nav">
+      <h2>Teens App</h2>
+      <div>
+        <button onclick="window.location.reload();">Refresh</button>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+top_nav_bar()
+
+def demo_chat_area():
+    st.info("Demo chat (read-only): how chat messages will look.")
+    demo_msgs = [
+        ("System", "Welcome to Teens App."),
+        ("System", "Use the left panel to select contacts or groups."),
+        ("System", "Private chats use numeric IDs (4+ digits).")
+    ]
+    for s, t in demo_msgs:
+        st.markdown(f'<div class="chat-bubble-recv"><b>{s}</b><br/>{t}</div>', unsafe_allow_html=True)
+
+# -------------------------
+# UI: Auth sidebar
+# -------------------------
+def ui_auth_sidebar():
+    st.sidebar.header("Account")
+    if st.session_state.get("user"):
+        prof = get_profile_by_user_id(st.session_state["user"]["id"])
+        display_name = (prof.get("username") if prof else st.session_state["user"].get("email"))
+        number = prof.get("number") if prof else ""
+        st.sidebar.markdown(f"**{display_name}**  \nID: `{number}`")
+        if st.sidebar.button("Sign out"):
             try:
-                auth_response = supabase.auth.sign_up({"email": email, "password": password})
-                if "user" in auth_response and auth_response.user:
-                    st.success("✅ Account created! Please check your email to confirm.")
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-    if auth_choice == "Sign In":
-        if st.button("Sign In"):
-            try:
-                auth_response = supabase.auth.sign_in_with_password({"email": email, "password": password})
-                if auth_response.user:
-                    st.session_state["user"] = email
-                    st.success("✅ Logged in successfully!")
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-    if "user" in st.session_state:
-        st.info(f"Logged in as {st.session_state['user']}")
-        if st.button("Log Out"):
+                supabase.auth.sign_out()
+            except Exception:
+                pass
             st.session_state.pop("user", None)
-            st.success("Logged out.")
-
-# -----------------------------
-# Home Page
-# -----------------------------
-def ui_home():
-    st.title("🏠 Home")
-    st.write("Welcome to Teens App!")
-
-# -----------------------------
-# Bible Reader
-# -----------------------------
-def ui_bible_reader():
-    st.title("📖 Bible Reader")
-    verse = st.text_area("Enter a verse reference (e.g., John 3:16)")
-    if st.button("Read Verse"):
-        st.success(f"📖 Showing verse: {verse}")
-
-# -----------------------------
-# Notes
-# -----------------------------
-def ui_notes():
-    st.title("📝 Notes")
-    if "notes" not in st.session_state:
-        st.session_state.notes = []
-    note = st.text_area("Write your note here:")
-    if st.button("Save Note"):
-        st.session_state.notes.append(note)
-    st.write("### Your Notes:")
-    for i, n in enumerate(st.session_state.notes, 1):
-        st.write(f"{i}. {n}")
-
-# -----------------------------
-# Profile
-# -----------------------------
-def ui_profile():
-    st.title("👤 Profile")
-    if "user" in st.session_state:
-        st.write(f"Logged in as: {st.session_state['user']}")
-    else:
-        st.warning("You need to log in to see your profile.")
-
-# -----------------------------
-# Chat (Supabase Integrated)
-# -----------------------------
-def ui_chat_and_groups():
-    st.header("💬 Chat & Groups")
-
-    if "user" not in st.session_state:
-        st.warning("You must log in to use the chat feature.")
+            st.experimental_rerun()
         return
 
-    username = st.session_state.user
-
-    tab1, tab2 = st.tabs(["Direct Chat", "Group Chat"])
-
-    # DIRECT CHAT
-    with tab1:
-        st.subheader("Direct Chat")
-        friend_id = st.text_input("Enter Friend's ID (at least 4 digits):")
-        message = st.text_input("Type your message:")
-
-        if st.button("Send Direct"):
-            if friend_id and len(friend_id) >= 4 and message:
-                supabase.table("messages").insert({
-                    "sender": username,
-                    "receiver": friend_id,
-                    "message": message,
-                    "timestamp": datetime.utcnow().isoformat()
-                }).execute()
-                st.success(f"Message sent to {friend_id} ✅")
-
-        st.write("### 📥 Your Chats")
-        direct_msgs = supabase.table("messages").select("*")\
-            .or_(f"sender.eq.{username},receiver.eq.{username}")\
-            .order("timestamp", desc=True).execute()
-
-        if direct_msgs.data:
-            for msg in direct_msgs.data:
-                st.write(f"**{msg['sender']} → {msg['receiver']}**: {msg['message']} ({msg['timestamp']})")
-        else:
-            st.info("No messages yet.")
-
-    # GROUP CHAT
-    with tab2:
-        st.subheader("Group Chat")
-        group_name = st.text_input("Enter Group Name:")
-        group_msg = st.text_input("Type your group message:")
-
-        if st.button("Send to Group"):
-            if group_name and group_msg:
-                supabase.table("group_messages").insert({
-                    "sender": username,
-                    "group": group_name,
-                    "message": group_msg,
-                    "timestamp": datetime.utcnow().isoformat()
-                }).execute()
-                st.success(f"Message sent to group {group_name} ✅")
-
-        st.write("### 📥 Group Messages")
-        if group_name:
-            msgs = supabase.table("group_messages").select("*")\
-                .eq("group", group_name)\
-                .order("timestamp", desc=True).execute()
-
-            if msgs.data:
-                for msg in msgs.data:
-                    st.write(f"**{msg['sender']}**: {msg['message']} ({msg['timestamp']})")
+    mode = st.sidebar.radio("Sign in / Sign up", ["Login", "Sign Up"])
+    if mode == "Sign Up":
+        st.sidebar.markdown("Create account")
+        email = st.sidebar.text_input("Email", key="su_email")
+        password = st.sidebar.text_input("Password", type="password", key="su_pass")
+        username = st.sidebar.text_input("Username (optional)", key="su_un")
+        if st.sidebar.button("Create account"):
+            if not email or not password:
+                st.sidebar.error("Email & password required")
             else:
-                st.info(f"No messages in {group_name} yet.")
+                r = signup_user(email, password, username)
+                if isinstance(r, dict) and r.get("error"):
+                    st.sidebar.error(r["error"])
+                else:
+                    st.sidebar.success("Account created — verify email if required. Then log in.")
+    else:
+        st.sidebar.markdown("Log in")
+        email = st.sidebar.text_input("Email", key="li_email")
+        password = st.sidebar.text_input("Password", type="password", key="li_pass")
+        if st.sidebar.button("Login"):
+            if not email or not password:
+                st.sidebar.error("Email & password required")
+            else:
+                res = login_user(email, password)
+                if res.get("error"):
+                    st.sidebar.error(res["error"])
+                else:
+                    st.sidebar.success("Logged in")
+                    st.experimental_rerun()
 
-# -----------------------------
-# Navigation
-# -----------------------------
-PAGES = {
-    "Auth": ui_auth,
-    "Home": ui_home,
-    "Bible": ui_bible_reader,
-    "Notes": ui_notes,
-    "Profile": ui_profile,
-    "Chat & Groups": ui_chat_and_groups
-}
-# -----------------------------
-# Store (Orders)
-# -----------------------------
-def ui_store():
-    st.title("🛒 Store")
+ui_auth_sidebar()
 
-    # Categories
-    categories = {
-        "Clothes": [
-            {"name": "T-shirt", "price": 15},
-            {"name": "Jeans", "price": 40},
-            {"name": "Hoodie", "price": 35}
-        ],
-        "Generators": [
-            {"name": "Small Generator", "price": 250},
-            {"name": "Medium Generator", "price": 500},
-            {"name": "Large Generator", "price": 850}
-        ]
+# -------------------------
+# UI: Chat & Groups (integrated)
+# -------------------------
+def ui_chat_and_groups():
+    st.header("💬 Chat & Groups")
+    if "user" not in st.session_state:
+        st.info("Sign in to use chat features. Demo below:")
+        demo_chat_area()
+        return
+
+    # load profiles and mapping
+    profiles = list_profiles()
+    me_profile = get_profile_by_user_id(st.session_state["user"]["id"])
+    my_id = st.session_state["user"]["id"]
+    my_number = me_profile.get("number") if me_profile else None
+    profile_map = {p["user_id"]: f"{p.get('username') or p.get('email')} ({p.get('number')})" for p in profiles}
+
+    left, right = st.columns([1.4, 3])
+
+    # LEFT: contacts, quick start by number
+    with left:
+        st.subheader("Quick start (Private)")
+        target_num = st.text_input("Friend's Chat ID (4+ digits)", key="private_target")
+        if st.button("Open Private Chat"):
+            if not target_num:
+                st.warning("Enter a valid ID")
+            else:
+                partner = get_profile_by_number(target_num)
+                if not partner:
+                    st.error("No user found with that ID")
+                else:
+                    # set chat_key (sorted user ids)
+                    a, b = sorted([my_id, partner["user_id"]])
+                    st.session_state["open_chat_key"] = f"{a}_{b}"
+                    st.session_state.pop("open_group", None)
+                    st.experimental_rerun()
+
+        st.divider()
+        st.subheader("Contacts")
+        for p in profiles:
+            if p["user_id"] == my_id: continue
+            label = f'{p.get("username") or p.get("email")} ({p.get("number")})'
+            if st.button(label, key=f"c_{p['user_id']}"):
+                a, b = sorted([my_id, p["user_id"]])
+                st.session_state["open_chat_key"] = f"{a}_{b}"
+                st.session_state.pop("open_group", None)
+                st.experimental_rerun()
+
+        st.divider()
+        st.subheader("Create / Open Group")
+        group_name = st.text_input("Group name", key="group_name")
+        if st.button("Open/Create Group"):
+            if group_name.strip():
+                st.session_state["open_group"] = group_name.strip()
+                st.session_state.pop("open_chat_key", None)
+                st.experimental_rerun()
+
+        st.divider()
+        if st.button("Refresh lists"):
+            st.experimental_rerun()
+
+    # RIGHT: chat pane
+    with right:
+        # Private chat mode
+        if st.session_state.get("open_chat_key"):
+            chat_key = st.session_state["open_chat_key"]
+            st.subheader(f"Private chat — {chat_key}")
+            msgs = fetch_messages(chat_key)
+            if not msgs:
+                st.info("No messages yet — say hi!")
+            for m in msgs:
+                sender = m.get("sender_id")
+                ts = m.get("created_at", "")
+                if sender == my_id:
+                    st.markdown(f'<div class="chat-bubble-sent">{m.get("content")}<div class="small-muted">{ts}</div></div>', unsafe_allow_html=True)
+                else:
+                    who = profile_map.get(sender, sender)
+                    st.markdown(f'<div class="chat-bubble-recv"><b>{who}</b><br/>{m.get("content")}<div class="small-muted">{ts}</div></div>', unsafe_allow_html=True)
+
+            with st.form("send_priv", clear_on_submit=True):
+                txt = st.text_area("Message", key="priv_msg", height=90)
+                if st.form_submit_button("Send"):
+                    if txt.strip():
+                        ok = send_message(chat_key, my_id, txt.strip())
+                        if not ok:
+                            st.error("Could not send message (check Supabase).")
+                        else:
+                            st.experimental_rerun()
+                    else:
+                        st.warning("Type a message first.")
+
+        # Group chat mode
+        elif st.session_state.get("open_group"):
+            group = st.session_state["open_group"]
+            st.subheader(f"Group: {group}")
+            msgs = fetch_messages(group)
+            if not msgs:
+                st.info("No messages yet in this group.")
+            for m in msgs:
+                sender = m.get("sender_id")
+                prof = profile_map.get(sender, sender)
+                ts = m.get("created_at", "")
+                if sender == my_id:
+                    st.markdown(f'<div class="chat-bubble-sent">{m.get("content")}<div class="small-muted">{ts}</div></div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="chat-bubble-recv"><b>{prof}</b><br/>{m.get("content")}<div class="small-muted">{ts}</div></div>', unsafe_allow_html=True)
+
+            with st.form("send_group", clear_on_submit=True):
+                gtxt = st.text_area("Message to group", key="group_msg", height=90)
+                if st.form_submit_button("Send"):
+                    if gtxt.strip():
+                        ok = send_message(group, my_id, gtxt.strip())
+                        if not ok:
+                            st.error("Could not send message.")
+                        else:
+                            st.experimental_rerun()
+                    else:
+                        st.warning("Type a message first.")
+
+        else:
+            st.info("Select a contact or create/open a group. Demo below:")
+            demo_chat_area()
+
+# -------------------------
+# UI: Notes
+# -------------------------
+def ui_notes():
+    st.header("📝 Notes")
+    a,b = st.columns([2,1])
+    with a:
+        with st.form("new_note", clear_on_submit=True):
+            title = st.text_input("Title")
+            content = st.text_area("Content")
+            if st.form_submit_button("Save"):
+                with get_local_conn() as conn:
+                    conn.execute("INSERT INTO local_notes (title, content, created_at) VALUES (?, ?, ?)",
+                                 (title, content, datetime.utcnow().isoformat()))
+                    conn.commit()
+                st.success("Saved locally")
+    with b:
+        st.write("Quick actions")
+        if st.button("Refresh notes"):
+            st.experimental_rerun()
+
+    df = pd.read_sql("SELECT id, title, content, created_at FROM local_notes ORDER BY id DESC", get_local_conn())
+    if not df.empty:
+        for _, row in df.iterrows():
+            st.subheader(row["title"])
+            st.write(row["content"])
+            st.caption(row["created_at"])
+            if st.button("Delete", key=f"del_{row['id']}"):
+                with get_local_conn() as conn:
+                    conn.execute("DELETE FROM local_notes WHERE id=?", (row["id"],))
+                    conn.commit()
+                st.experimental_rerun()
+    else:
+        st.info("No notes yet.")
+
+# -------------------------
+# UI: Scheduler
+# -------------------------
+def ui_schedule():
+    st.header("📅 Scheduler")
+    with st.form("add_task", clear_on_submit=True):
+        task = st.text_input("Task")
+        d = st.date_input("Date", value=date.today())
+        t = st.time_input("Time", value=time(17,0))
+        if st.form_submit_button("Add"):
+            with get_local_conn() as conn:
+                conn.execute("INSERT INTO local_schedule (task, date, time) VALUES (?, ?, ?)",
+                             (task, d.isoformat(), t.isoformat()))
+                conn.commit()
+            st.success("Added")
+    df = pd.read_sql("SELECT id, task, date, time FROM local_schedule ORDER BY date, time", get_local_conn())
+    if not df.empty:
+        st.table(df)
+    else:
+        st.info("No tasks scheduled.")
+
+# -------------------------
+# UI: Study & Exam
+# -------------------------
+def ui_study_materials():
+    st.header("📚 Study Materials")
+    materials = {
+        "Mathematics": ["Algebra", "Geometry", "Calculus"],
+        "Biology": ["Cell Biology", "Genetics"],
+        "English": ["Grammar", "Comprehension"]
     }
+    subj = st.selectbox("Subject", list(materials.keys()))
+    st.write("Chapters:")
+    for ch in materials[subj]:
+        st.markdown(f"- {ch}")
 
-    # Ensure cart exists
-    if "cart" not in st.session_state:
-        st.session_state.cart = []
-
-    tab1, tab2 = st.tabs(["🛍️ Browse Products", "🛒 Cart"])
-
-    with tab1:
-        for cat, products in categories.items():
-            st.subheader(cat)
-            for product in products:
-                col1, col2 = st.columns([3,1])
-                with col1:
-                    st.write(f"{product['name']} - **${product['price']}**")
-                with col2:
-                    if st.button(f"Add {product['name']}", key=product['name']):
-                        st.session_state.cart.append(product)
-                        st.success(f"✅ {product['name']} added to cart!")
-
-    with tab2:
-        st.subheader("Your Cart")
-        if not st.session_state.cart:
-            st.info("Your cart is empty.")
-        else:
-            total = 0
-            for i, item in enumerate(st.session_state.cart, 1):
-                st.write(f"{i}. {item['name']} - ${item['price']}")
-                total += item["price"]
-
-            st.write(f"### 💵 Total: ${total}")
-
-            if "user" not in st.session_state:
-                st.warning("⚠️ You must log in to checkout.")
+def ui_exam_prep():
+    st.header("❓ Exam Practice")
+    banks = {
+        "Math": [("What is 7×8?", "56"), ("Solve x+2=5", "3")],
+        "Biology": [("What is photosynthesis?", "Process by which plants make food")]
+    }
+    subject = st.selectbox("Subject", list(banks.keys()))
+    if st.button("Get Question"):
+        q, a = random.choice(banks[subject])
+        st.write(q)
+        ans = st.text_input("Your answer")
+        if st.button("Check"):
+            if ans.strip().lower() == a.lower():
+                st.success("Correct!")
             else:
-                if st.button("Checkout"):
-                    try:
-                        order = {
-                            "user": st.session_state.user,
-                            "items": [item["name"] for item in st.session_state.cart],
-                            "total": total,
-                            "timestamp": datetime.utcnow().isoformat()
-                        }
-                        supabase.table("orders").insert(order).execute()
-                        st.success("✅ Order placed successfully!")
-                        st.session_state.cart = []  # Clear cart
-                    except Exception as e:
-                        st.error(f"Error saving order: {e}")
+                st.error(f"Not quite. Answer: {a}")
 
-st.sidebar.title("📌 Navigation")
-choice = st.sidebar.radio("Go to", list(PAGES.keys()))
-PAGES[choice]()
+# -------------------------
+# UI: Bible Reader
+# -------------------------
+def ui_bible():
+    st.header("📖 Bible Reader")
+    BOOKS = ["Genesis","Exodus","Psalms","Proverbs","Matthew","Mark","Luke","John"]
+    book = st.selectbox("Book", BOOKS)
+    chap = st.number_input("Chapter", min_value=1, value=1)
+    if st.button("Load Chapter"):
+        data = fetch_bible_chapter(book, chap)
+        if not data:
+            st.error("Could not fetch chapter.")
+            return
+        verses = data.get("verses", [])
+        for v in verses:
+            ref = f'{v.get("book_name","")} {v.get("chapter","")}:{v.get("verse","")}'
+            st.markdown(f"<div style='background-color:rgba(255,255,255,0.02);padding:8px;border-radius:8px;color:#87CEEB'>{ref}: {v.get('text','')}</div>", unsafe_allow_html=True)
+
+# -------------------------
+# PAGES & RUN
+# -------------------------
+PAGES = {
+    "Chat & Groups": ui_chat_and_groups,
+    "Notes": ui_notes,
+    "Scheduler": ui_schedule,
+    "Study Materials": ui_study_materials,
+    "Exam Prep": ui_exam_prep,
+    "Bible": ui_bible
+}
+
+st.sidebar.title("Navigate")
+page = st.sidebar.radio("Go to", list(PAGES.keys()))
+st.markdown("---")
+if st.session_state.get("user"):
+    prof = get_profile_by_user_id(st.session_state["user"]["id"])
+    st.sidebar.write(f"Signed in: **{prof.get('username') if prof else st.session_state['user'].get('email')}**")
+else:
+    st.sidebar.write("Not signed in")
+st.markdown("---")
+PAGES[page]()
