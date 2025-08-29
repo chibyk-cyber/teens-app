@@ -886,3 +886,4 @@ def profile_page():
         st.write("🏆 Bible Scholar (Read 50 verses)")
         st.write("🏆 Math Whiz (Solved 100 problems)")
         st.write("🏆 Study Buddy (Joined 3 groups)")
+        main()
