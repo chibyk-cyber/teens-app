@@ -7,6 +7,69 @@ import random
 import requests
 from supabase import create_client, Client
 
+
+# ----------------- SUPABASE INIT -----------------
+SUPABASE_URL = st.secrets["supabase"]["url"]
+SUPABASE_KEY = st.secrets["supabase"]["key"]
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ----------------- AUTH FUNCTIONS -----------------
+def sign_up(email, password, username):
+    try:
+        auth_response = supabase.auth.sign_up({"email": email, "password": password})
+        user = auth_response.user
+        if user:
+            # save username to profiles table
+            supabase.table("profiles").insert({
+                "id": user.id,
+                "username": username
+            }).execute()
+            return True, "Account created successfully!"
+        else:
+            return False, "Error creating account."
+    except Exception as e:
+        return False, str(e)
+
+def sign_in(email, password):
+    try:
+        auth_response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        return True, auth_response.user
+    except Exception as e:
+        return False, str(e)
+
+# ----------------- UI PAGE -----------------
+def ui_auth_page():
+    st.title("🔑 Sign In / Sign Up")
+    choice = st.radio("Choose Action", ["Sign In", "Sign Up"])
+
+    if choice == "Sign Up":
+        st.subheader("Create New Account")
+        email = st.text_input("Email", key="signup_email")
+        username = st.text_input("Username", key="signup_username")
+        password = st.text_input("Password", type="password", key="signup_password")
+
+        if st.button("Sign Up"):
+            ok, msg = sign_up(email, password, username)
+            if ok:
+                st.success(msg)
+            else:
+                st.error(msg)
+
+    else:  # Sign In
+        st.subheader("Login to your Account")
+        email = st.text_input("Email", key="signin_email")
+        password = st.text_input("Password", type="password", key="signin_password")
+
+        if st.button("Sign In"):
+            ok, result = sign_in(email, password)
+            if ok:
+                st.session_state["user"] = result
+                st.success("✅ Logged in successfully!")
+                st.experimental_rerun()
+            else:
+                st.error(result)
+
 # -------------------------
 # CONFIG / STYLING
 # -------------------------
@@ -495,3 +558,4 @@ else:
     st.sidebar.write("Not signed in")
 st.markdown("---")
 PAGES[page]()
+
