@@ -57,9 +57,13 @@ if 'messages' not in st.session_state:
 if 'users' not in st.session_state:
     # Sample users for demo
     st.session_state.users = {
-        'user1': {'username': 'TeenUser1', 'number': '1234'},
-        'user2': {'username': 'TeenUser2', 'number': '5678'}
+        'user1': {'username': 'TeenUser1', 'number': '1234', 'password': 'pass1'},
+        'user2': {'username': 'TeenUser2', 'number': '5678', 'password': 'pass2'}
     }
+if 'current_song' not in st.session_state:
+    st.session_state.current_song = None
+if 'audio_playing' not in st.session_state:
+    st.session_state.audio_playing = False
 
 # Simple authentication functions
 def sign_up(username, number, password):
@@ -91,6 +95,8 @@ def sign_out():
     st.session_state.user = None
     st.session_state.profile = None
     st.session_state.page = 'Home'
+    st.session_state.current_song = None
+    st.session_state.audio_playing = False
     st.experimental_rerun()
 
 def check_auth():
@@ -263,10 +269,11 @@ def bible_reader_page():
 def music_player_page():
     st.markdown('<h1 class="sub-header">🎶 Music Player</h1>', unsafe_allow_html=True)
     
+    # Public domain worship songs that can be streamed
     worship_songs = [
-        {"title": "Good Good Father", "artist": "Chris Tomlin"},
-        {"title": "What a Beautiful Name", "artist": "Hillsong Worship"},
-        {"title": "No Longer Slaves", "artist": "Bethel Music"},
+        {"title": "Amazing Grace", "artist": "Traditional", "url": "https://www.christiansongs.com.au/mp3/amazing_grace.mp3"},
+        {"title": "What a Friend We Have in Jesus", "artist": "Traditional", "url": "https://www.christiansongs.com.au/mp3/what_a_friend.mp3"},
+        {"title": "How Great Thou Art", "artist": "Traditional", "url": "https://www.christiansongs.com.au/mp3/how_great_thou_art.mp3"},
     ]
     
     for i, song in enumerate(worship_songs):
@@ -277,12 +284,35 @@ def music_player_page():
         with col2:
             if st.button("▶️ Play", key=f"play_{i}"):
                 st.session_state.current_song = song
+                st.session_state.audio_playing = True
                 st.success(f"Playing: {song['title']}")
+                st.experimental_rerun()
     
-    if 'current_song' in st.session_state:
+    # Display current song and audio player
+    if st.session_state.current_song:
         st.divider()
         st.subheader("Now Playing")
         st.write(f"**{st.session_state.current_song['title']}** by {st.session_state.current_song['artist']}")
+        
+        # Audio player
+        st.audio(st.session_state.current_song['url'], format="audio/mp3")
+        
+        # Player controls
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if st.button("⏮ Previous"):
+                st.info("Previous song selected")
+        with col2:
+            if st.button("⏸ Pause" if st.session_state.audio_playing else "▶️ Play"):
+                st.session_state.audio_playing = not st.session_state.audio_playing
+                st.experimental_rerun()
+        with col3:
+            if st.button("⏭ Next"):
+                st.info("Next song selected")
+    
+    # If no song is selected, show instructions
+    else:
+        st.info("Select a song to begin listening")
 
 # Games page
 @require_auth
