@@ -1,5 +1,3 @@
-
-streamlit
-requests
-python-dotenv
-supabase
+streamlit==1.28.0
+supabase==1.0.3
+python-dotenv==1.0.0
