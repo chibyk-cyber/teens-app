@@ -13,8 +13,8 @@ from streamlit_option_menu import option_menu
 load_dotenv()
 
 # Supabase configuration
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_URL = os.getenv("https://vkvwxnnirqtkwfhuskvo.supabase.co")
+SUPABASE_KEY = os.getenv("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZrdnd4bm5pcnF0a3dmaHVza3ZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYzMDAzMTcsImV4cCI6MjA3MTg3NjMxN30.-yAV2mYDcesXM5wncmbcq1GlpD60q32lx6pe1bPDKfg")
 
 # Initialize Supabase client
 @st.cache_resource
@@ -651,3 +651,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
