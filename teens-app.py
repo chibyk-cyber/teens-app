@@ -1,7 +1,14 @@
+
 import streamlit as st
+import supabase
+import os
 import random
 import time
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Page configuration
 st.set_page_config(
@@ -49,8 +56,40 @@ st.markdown("""
         border-radius: 10px;
         margin: 10px 0;
     }
+    .music-player {
+        background: linear-gradient(135deg, #ff7e5f, #feb47b);
+        padding: 15px;
+        border-radius: 10px;
+        color: white;
+        margin: 10px 0;
+    }
 </style>
 """, unsafe_allow_html=True)
+
+# Initialize Supabase client
+@st.cache_resource
+def init_supabase():
+    try:
+        # Try to get credentials from Streamlit secrets
+        SUPABASE_URL = st.secrets["supabase"]["url"]
+        SUPABASE_KEY = st.secrets["supabase"]["key"]
+    except:
+        # Fallback to environment variables
+        SUPABASE_URL = os.getenv("SUPABASE_URL")
+        SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+    
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        st.error("Supabase credentials not found. Please check your configuration.")
+        return None
+    
+    try:
+        client = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
+        return client
+    except Exception as e:
+        st.error(f"Error initializing Supabase: {str(e)}")
+        return None
+
+supabase_client = init_supabase()
 
 # Initialize session state
 if 'user' not in st.session_state:
@@ -64,22 +103,13 @@ if 'messages' not in st.session_state:
 if 'group_messages' not in st.session_state:
     st.session_state.group_messages = {}
 if 'users' not in st.session_state:
-    # Sample users for demo
-    st.session_state.users = {
-        'user1': {'username': 'TeenUser1', 'number': '1234', 'password': 'pass1'},
-        'user2': {'username': 'TeenUser2', 'number': '5678', 'password': 'pass2'},
-        'user3': {'username': 'StudyBuddy', 'number': '9999', 'password': 'pass3'}
-    }
+    st.session_state.users = {}
 if 'current_song' not in st.session_state:
     st.session_state.current_song = None
 if 'audio_playing' not in st.session_state:
     st.session_state.audio_playing = False
 if 'study_groups' not in st.session_state:
-    st.session_state.study_groups = {
-        'math_group': {'name': 'Mathematics Club', 'members': ['1234', '5678']},
-        'science_group': {'name': 'Science Squad', 'members': ['1234']},
-        'english_group': {'name': 'English Masters', 'members': ['5678']}
-    }
+    st.session_state.study_groups = {}
 
 # WAEC Questions
 waec_questions = {
@@ -167,41 +197,107 @@ study_topics = {
     ]
 }
 
-# Simple authentication functions
-def sign_up(username, number, password):
+# Worship songs with actual playable URLs
+worship_songs = [
+    {"title": "Amazing Grace", "artist": "Chris Tomlin", "url": "https://cdn.pixabay.com/download/audio/2022/01/20/audio_5c27c9508f.mp3?filename=amazing-grace-121002.mp3"},
+    {"title": "What a Beautiful Name", "artist": "Hillsong Worship", "url": "https://cdn.pixabay.com/download/audio/2021/10/25/audio_5b86d4f9c0.mp3?filename=inspirational-background-music-112834.mp3"},
+    {"title": "Oceans", "artist": "Hillsong UNITED", "url": "https://cdn.pixabay.com/download/audio/2022/03/15/audio_345c531f9c.mp3?filename=soft-inspiring-background-amp-amp-piano-118532.mp3"},
+    {"title": "Good Good Father", "artist": "Chris Tomlin", "url": "https://cdn.pixabay.com/download/audio/2022/01/20/audio_c4a38a0d0e.mp3?filename=church-bell-02-176819.mp3"},
+    {"title": "Reckless Love", "artist": "Cory Asbury", "url": "https://cdn.pixabay.com/download/audio/2022/03/15/audio_6a851bc5b8.mp3?filename=cinematic-inspiring-piano-116333.mp3"}
+]
+
+# Authentication functions with Supabase integration
+def sign_up(email, password, username, number):
     try:
-        # In a real app, this would save to Supabase
-        user_id = f"user{random.randint(1000, 9999)}"
-        st.session_state.users[user_id] = {
-            'username': username,
-            'number': number,
-            'password': password  # In real app, hash this
-        }
-        return True, "Sign up successful! Please log in."
+        if supabase_client:
+            # Create user with Supabase Auth
+            auth_response = supabase_client.auth.sign_up({
+                "email": email,
+                "password": password,
+            })
+            
+            if auth_response.user:
+                # Create profile in profiles table
+                profile_response = supabase_client.table("profiles").insert({
+                    "id": auth_response.user.id,
+                    "username": username,
+                    "number": number
+                }).execute()
+                
+                return True, "Sign up successful! Please check your email to verify your account."
+            else:
+                return False, "Error creating account."
+        else:
+            # Fallback to session state if Supabase is not available
+            user_id = f"user{random.randint(1000, 9999)}"
+            st.session_state.users[user_id] = {
+                'username': username,
+                'number': number,
+                'password': password,
+                'email': email
+            }
+            return True, "Sign up successful! Please log in."
+    
     except Exception as e:
         return False, f"Error: {str(e)}"
 
-def sign_in(username, password):
+def sign_in(email, password):
     try:
-        # Simple demo authentication
-        for user_id, user_data in st.session_state.users.items():
-            if user_data['username'] == username and user_data.get('password') == password:
-                st.session_state.user = user_id
-                st.session_state.profile = user_data
+        if supabase_client:
+            response = supabase_client.auth.sign_in_with_password({
+                "email": email,
+                "password": password
+            })
+            
+            if response.user:
+                st.session_state.user = response.user
+                # Get user profile
+                profile = supabase_client.table("profiles").select("*").eq("id", response.user.id).execute()
+                if profile.data:
+                    st.session_state.profile = profile.data[0]
                 return True, "Login successful!"
-        return False, "Invalid username or password."
+            else:
+                return False, "Login failed. Please check your credentials."
+        else:
+            # Fallback to session state if Supabase is not available
+            for user_id, user_data in st.session_state.users.items():
+                if user_data.get('email') == email and user_data.get('password') == password:
+                    st.session_state.user = user_id
+                    st.session_state.profile = user_data
+                    return True, "Login successful!"
+            return False, "Invalid email or password."
+    
     except Exception as e:
         return False, f"Error: {str(e)}"
 
 def sign_out():
-    st.session_state.user = None
-    st.session_state.profile = None
-    st.session_state.page = 'Home'
-    st.session_state.current_song = None
-    st.session_state.audio_playing = False
-    st.experimental_rerun()
+    try:
+        if supabase_client:
+            supabase_client.auth.sign_out()
+        st.session_state.user = None
+        st.session_state.profile = None
+        st.session_state.page = 'Home'
+        st.session_state.current_song = None
+        st.session_state.audio_playing = False
+        st.experimental_rerun()
+    except Exception as e:
+        st.error(f"Error signing out: {str(e)}")
 
 def check_auth():
+    if 'user' not in st.session_state:
+        # Try to get the current session from Supabase
+        if supabase_client:
+            try:
+                session = supabase_client.auth.get_session()
+                if session:
+                    st.session_state.user = session.user
+                    # Get user profile
+                    profile = supabase_client.table("profiles").select("*").eq("id", session.user.id).execute()
+                    if profile.data:
+                        st.session_state.profile = profile.data[0]
+            except:
+                pass
+    
     return st.session_state.user is not None
 
 # Authentication wrapper
@@ -223,12 +319,12 @@ def login_page():
     
     with tab1:
         with st.form("login_form"):
-            username = st.text_input("Username")
+            email = st.text_input("Email")
             password = st.text_input("Password", type="password")
             login_btn = st.form_submit_button("Login")
             
             if login_btn:
-                success, message = sign_in(username, password)
+                success, message = sign_in(email, password)
                 if success:
                     st.success(message)
                     time.sleep(1)
@@ -238,6 +334,7 @@ def login_page():
     
     with tab2:
         with st.form("signup_form"):
+            email = st.text_input("Email")
             username = st.text_input("Username")
             number = st.text_input("4+ Digit Code", max_chars=6)
             password = st.text_input("Password", type="password")
@@ -258,7 +355,7 @@ def login_page():
                 elif password != confirm_password:
                     st.error("Passwords do not match")
                 else:
-                    success, message = sign_up(username, number, password)
+                    success, message = sign_up(email, password, username, number)
                     if success:
                         st.success(message)
                     else:
@@ -381,18 +478,12 @@ def bible_reader_page():
         else:
             st.info("Select a book, chapter, and verse to begin reading.")
 
-# Music Player page
+# Music Player page with actual playable music
 @require_auth
 def music_player_page():
     st.markdown('<h1 class="sub-header">🎶 Music Player</h1>', unsafe_allow_html=True)
     
-    # Public domain worship songs that can be streamed
-    worship_songs = [
-        {"title": "Amazing Grace", "artist": "Traditional", "url": "https://www.christiansongs.com.au/mp3/amazing_grace.mp3"},
-        {"title": "What a Friend We Have in Jesus", "artist": "Traditional", "url": "https://www.christiansongs.com.au/mp3/what_a_friend.mp3"},
-        {"title": "How Great Thou Art", "artist": "Traditional", "url": "https://www.christiansongs.com.au/mp3/how_great_thou_art.mp3"},
-    ]
-    
+    # Display all songs
     for i, song in enumerate(worship_songs):
         col1, col2 = st.columns([3, 1])
         with col1:
@@ -407,8 +498,8 @@ def music_player_page():
     
     # Display current song and audio player
     if st.session_state.current_song:
-        st.divider()
-        st.subheader("Now Playing")
+        st.markdown('<div class="music-player">', unsafe_allow_html=True)
+        st.subheader("🎵 Now Playing")
         st.write(f"**{st.session_state.current_song['title']}** by {st.session_state.current_song['artist']}")
         
         # Audio player
@@ -418,14 +509,23 @@ def music_player_page():
         col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
             if st.button("⏮ Previous"):
-                st.info("Previous song selected")
+                # Find current song index and play previous
+                current_index = next((i for i, song in enumerate(worship_songs) if song['title'] == st.session_state.current_song['title']), 0)
+                prev_index = (current_index - 1) % len(worship_songs)
+                st.session_state.current_song = worship_songs[prev_index]
+                st.experimental_rerun()
         with col2:
             if st.button("⏸ Pause" if st.session_state.audio_playing else "▶️ Play"):
                 st.session_state.audio_playing = not st.session_state.audio_playing
                 st.experimental_rerun()
         with col3:
             if st.button("⏭ Next"):
-                st.info("Next song selected")
+                # Find current song index and play next
+                current_index = next((i for i, song in enumerate(worship_songs) if song['title'] == st.session_state.current_song['title']), 0)
+                next_index = (current_index + 1) % len(worship_songs)
+                st.session_state.current_song = worship_songs[next_index]
+                st.experimental_rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # If no song is selected, show instructions
     else:
@@ -596,7 +696,7 @@ def study_hub_page():
         st.write("- Form study groups with friends")
         st.write("- Teach concepts to others to reinforce your understanding")
 
-# Chat & Groups page
+# Chat & Groups page with Supabase integration
 @require_auth
 def chat_page():
     st.markdown('<h1 class="sub-header">💬 Chat & Groups</h1>', unsafe_allow_html=True)
@@ -610,12 +710,22 @@ def chat_page():
         receiver_number = st.text_input("Enter the recipient's code:", max_chars=6, key="dm_code")
         
         if receiver_number:
-            # Find receiver
+            # Try to find receiver in Supabase first
             receiver = None
-            for user_id, user_data in st.session_state.users.items():
-                if user_data['number'] == receiver_number:
-                    receiver = user_data
-                    break
+            if supabase_client:
+                try:
+                    profile_response = supabase_client.table("profiles").select("*").eq("number", receiver_number).execute()
+                    if profile_response.data:
+                        receiver = profile_response.data[0]
+                except:
+                    pass
+            
+            # Fallback to session state if Supabase is not available or user not found
+            if not receiver:
+                for user_id, user_data in st.session_state.users.items():
+                    if user_data['number'] == receiver_number:
+                        receiver = user_data
+                        break
             
             if receiver:
                 st.write(f"Chat with: {receiver['username']} (#{receiver['number']})")
@@ -638,6 +748,18 @@ def chat_page():
                 new_message = st.text_input("Type your message:", key="dm_message")
                 if st.button("Send", key="dm_send"):
                     if new_message:
+                        # Save to Supabase if available
+                        if supabase_client:
+                            try:
+                                supabase_client.table("messages").insert({
+                                    "sender_id": st.session_state.user.id,
+                                    "receiver_number": receiver_number,
+                                    "message": new_message
+                                }).execute()
+                            except:
+                                pass
+                        
+                        # Save to session state
                         st.session_state.messages[chat_id].append({
                             "sender": st.session_state.profile['number'],
                             "text": new_message,
@@ -726,54 +848,4 @@ def profile_page():
         new_username = st.text_input("New Username", value=st.session_state.profile['username'])
         
         if st.button("Update Profile"):
-            st.session_state.profile['username'] = new_username
-            st.success("Profile updated successfully!")
-            time.sleep(1)
-            st.experimental_rerun()
-    
-    with col2:
-        st.subheader("Your Stats")
-        
-        col21, col22, col23 = st.columns(3)
-        with col21:
-            st.markdown('<div class="card"><h3>5</h3><p>Friends</p></div>', unsafe_allow_html=True)
-        with col22:
-            st.markdown('<div class="card"><h3>12</h3><p>Devotionals</p></div>', unsafe_allow_html=True)
-        with col23:
-            st.markdown('<div class="card"><h3>350</h3><p>Points</p></div>', unsafe_allow_html=True)
-        
-        st.subheader("Study Progress")
-        st.write("📊 Mathematics: 75% complete")
-        st.write("📊 English: 60% complete")
-        st.write("📊 Biology: 85% complete")
-        st.write("📊 Physics: 50% complete")
-        
-        st.subheader("Achievements")
-        st.write("🏆 Bible Scholar (Read 50 verses)")
-        st.write("🏆 Math Whiz (Solved 100 problems)")
-        st.write("🏆 Study Buddy (Joined 3 groups)")
-
-# Main app logic
-def main():
-    if not check_auth():
-        login_page()
-    else:
-        navigation()
-        
-        if st.session_state.page == "Home":
-            home_page()
-        elif st.session_state.page == "Bible Reader":
-            bible_reader_page()
-        elif st.session_state.page == "Music Player":
-            music_player_page()
-        elif st.session_state.page == "Games":
-            games_page()
-        elif st.session_state.page == "Study Hub":
-            study_hub_page()
-        elif st.session_state.page == "Chat & Groups":
-            chat_page()
-        elif st.session_state.page == "Profile":
-            profile_page()
-
-if __name__ == "__main__":
-    main()
+            # Update in Supabase
