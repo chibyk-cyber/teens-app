@@ -535,6 +535,96 @@ def ui_bible():
         for v in verses:
             ref = f'{v.get("book_name","")} {v.get("chapter","")}:{v.get("verse","")}'
             st.markdown(f"<div style='background-color:rgba(255,255,255,0.02);padding:8px;border-radius:8px;color:#87CEEB'>{ref}: {v.get('text','')}</div>", unsafe_allow_html=True)
+# -------------------------
+# UI: Auth Page
+# -------------------------
+def ui_auth_page():
+    st.title("🔑 Welcome to Teens App")
+    st.write("Please sign in or create an account to continue.")
+
+    tabs = st.tabs(["Login", "Sign Up"])
+
+    # LOGIN TAB
+    with tabs[0]:
+        st.subheader("Login")
+        email = st.text_input("Email", key="auth_email")
+        password = st.text_input("Password", type="password", key="auth_pass")
+        if st.button("Sign In", key="auth_login"):
+            if not email or not password:
+                st.error("Email and password required")
+            else:
+                res = login_user(email, password)
+                if res.get("error"):
+                    st.error(res["error"])
+                else:
+                    st.success("✅ Logged in successfully!")
+                    st.experimental_rerun()
+
+    # SIGNUP TAB
+    with tabs[1]:
+        st.subheader("Create Account")
+        email = st.text_input("Email", key="auth_su_email")
+        password = st.text_input("Password", type="password", key="auth_su_pass")
+        username = st.text_input("Username (optional)", key="auth_su_un")
+        if st.button("Sign Up", key="auth_signup"):
+            if not email or not password:
+                st.error("Email and password required")
+            else:
+                r = signup_user(email, password, username)
+                if isinstance(r, dict) and r.get("error"):
+                    st.error(r["error"])
+                else:
+                    st.success("🎉 Account created — check your email if verification required.")
+def ui_auth_sidebar():
+    st.sidebar.header("Account")
+
+    if st.session_state.get("user"):
+        prof = get_profile_by_user_id(st.session_state["user"]["id"])
+        display_name = (prof.get("username") if prof else st.session_state["user"].get("email"))
+        number = prof.get("number") if prof else ""
+        st.sidebar.markdown(f"**{display_name}**  \nID: `{number}`")
+
+        # SIGN OUT BUTTON
+        if st.sidebar.button("Sign Out"):
+            try:
+                supabase.auth.sign_out()
+            except Exception:
+                pass
+            st.session_state.pop("user", None)
+            st.success("✅ You have signed out.")
+            st.experimental_rerun()  # refresh app
+        return
+
+    # If not logged in, show login/signup tabs
+    mode = st.sidebar.radio("Sign in / Sign up", ["Login", "Sign Up"])
+    if mode == "Sign Up":
+        st.sidebar.markdown("Create account")
+        email = st.sidebar.text_input("Email", key="su_email")
+        password = st.sidebar.text_input("Password", type="password", key="su_pass")
+        username = st.sidebar.text_input("Username (optional)", key="su_un")
+        if st.sidebar.button("Create account"):
+            if not email or not password:
+                st.sidebar.error("Email & password required")
+            else:
+                r = signup_user(email, password, username)
+                if isinstance(r, dict) and r.get("error"):
+                    st.sidebar.error(r["error"])
+                else:
+                    st.sidebar.success("🎉 Account created — verify email if required. Then log in.")
+    else:
+        st.sidebar.markdown("Log in")
+        email = st.sidebar.text_input("Email", key="li_email")
+        password = st.sidebar.text_input("Password", type="password", key="li_pass")
+        if st.sidebar.button("Login"):
+            if not email or not password:
+                st.sidebar.error("Email & password required")
+            else:
+                res = login_user(email, password)
+                if res.get("error"):
+                    st.sidebar.error(res["error"])
+                else:
+                    st.sidebar.success("✅ Logged in successfully!")
+                    st.experimental_rerun()
 
 # -------------------------
 # PAGES & RUN
@@ -558,4 +648,5 @@ else:
     st.sidebar.write("Not signed in")
 st.markdown("---")
 PAGES[page]()
+
 
