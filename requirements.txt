@@ -1,5 +1,5 @@
-# requirements.txt (extended version)
-streamlit==1.28.0
+
+streamlit
 requests==2.31.0
 python-dotenv==1.0.0
-supabse
+supabase
