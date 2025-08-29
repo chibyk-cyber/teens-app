@@ -168,7 +168,7 @@ waec_questions = {
         "4. Define pH",
         "5. What is the periodic table?",
         "6. Name the elements represented by Na, K, and Fe",
-        "7. What is a chemical reaction?",
+        "7. Extremely long line that should be truncated for display purposes",
         "8. Define oxidation",
         "9. What is the difference between an element and a compound?",
         "10. Name the process by which solid changes directly to gas"
@@ -279,7 +279,7 @@ def sign_out():
         st.session_state.page = 'Home'
         st.session_state.current_song = None
         st.session_state.audio_playing = False
-        st.experimental_rerun()
+        st.rerun()
     except Exception as e:
         st.error(f"Error signing out: {str(e)}")
 
@@ -328,7 +328,7 @@ def login_page():
                 if success:
                     st.success(message)
                     time.sleep(1)
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error(message)
     
@@ -471,7 +471,7 @@ def bible_reader_page():
             else:
                 verse_text = "The Lord bless you and keep you; the Lord make his face shine on you and be gracious to you. - Numbers 6:24-25"
             
-            st.markdown(f'<div class="card"><h3>{selected_book} {chapter}:{verse}</h3><p>{verse_text}</p></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="card"><h3>{selected_book} {chapter}:{verse}</h3><p>{verse_text</p></div>', unsafe_allow_html=True)
             
             if st.button("❤️ Add to Favorites"):
                 st.success("Verse added to favorites!")
@@ -494,7 +494,7 @@ def music_player_page():
                 st.session_state.current_song = song
                 st.session_state.audio_playing = True
                 st.success(f"Playing: {song['title']}")
-                st.experimental_rerun()
+                st.rerun()
     
     # Display current song and audio player
     if st.session_state.current_song:
@@ -513,18 +513,18 @@ def music_player_page():
                 current_index = next((i for i, song in enumerate(worship_songs) if song['title'] == st.session_state.current_song['title']), 0)
                 prev_index = (current_index - 1) % len(worship_songs)
                 st.session_state.current_song = worship_songs[prev_index]
-                st.experimental_rerun()
+                st.rerun()
         with col2:
             if st.button("⏸ Pause" if st.session_state.audio_playing else "▶️ Play"):
                 st.session_state.audio_playing = not st.session_state.audio_playing
-                st.experimental_rerun()
+                st.rerun()
         with col3:
             if st.button("⏭ Next"):
                 # Find current song index and play next
                 current_index = next((i for i, song in enumerate(worship_songs) if song['title'] == st.session_state.current_song['title']), 0)
                 next_index = (current_index + 1) % len(worship_songs)
                 st.session_state.current_song = worship_songs[next_index]
-                st.experimental_rerun()
+                st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     
     # If no song is selected, show instructions
@@ -573,13 +573,13 @@ def games_page():
                 
                 time.sleep(1)
                 st.session_state.trivia_index += 1
-                st.experimental_rerun()
+                st.rerun()
         else:
             st.success(f"Quiz completed! Your score: {st.session_state.trivia_score}/{len(questions)}")
             if st.button("Play Again"):
                 st.session_state.trivia_index = 0
                 st.session_state.trivia_score = 0
-                st.experimental_rerun()
+                st.rerun()
     
     elif game_choice == "Word Scramble":
         st.subheader("Bible Word Scramble")
@@ -602,7 +602,7 @@ def games_page():
                 time.sleep(1)
                 del st.session_state.scramble_word
                 del st.session_state.scrambled
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Try again!")
     
@@ -767,7 +767,7 @@ def chat_page():
                         })
                         st.success("Message sent!")
                         time.sleep(0.5)
-                        st.experimental_rerun()
+                        st.rerun()
             else:
                 st.error("No user found with that code.")
     
@@ -805,7 +805,7 @@ def chat_page():
                             })
                             st.success("Message sent to group!")
                             time.sleep(0.5)
-                            st.experimental_rerun()
+                            st.rerun()
         else:
             st.info("You haven't joined any study groups yet.")
     
@@ -825,12 +825,10 @@ def chat_page():
                 }
                 st.success(f"Group '{group_name}' created successfully!")
                 time.sleep(1)
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("Please enter a group name.")
 
-# Profile page
-@require_auth
 # Profile page
 @require_auth
 def profile_page():
@@ -853,6 +851,11 @@ def profile_page():
             # Update in Supabase if available
             if supabase_client and 'id' in st.session_state.profile:
                 try:
+                    supabase_client
+        if st.button("Update Profile"):
+            # Update in Supabase if available
+            if supabase_client and 'id' in st.session_state.profile:
+                try:
                     supabase_client.table("profiles").update({
                         "username": new_username
                     }).eq("id", st.session_state.profile['id']).execute()
@@ -863,7 +866,7 @@ def profile_page():
             st.session_state.profile['username'] = new_username
             st.success("Profile updated successfully!")
             time.sleep(1)
-            st.experimental_rerun()
+            st.rerun()
     
     with col2:
         st.subheader("Your Stats")
@@ -886,4 +889,29 @@ def profile_page():
         st.write("🏆 Bible Scholar (Read 50 verses)")
         st.write("🏆 Math Whiz (Solved 100 problems)")
         st.write("🏆 Study Buddy (Joined 3 groups)")
-        main()
+
+# Main app logic
+def main():
+    if not check_auth():
+        login_page()
+    else:
+        navigation()
+        
+        if st.session_state.page == "Home":
+            home_page()
+        elif st.session_state.page == "Bible Reader":
+            bible_reader_page()
+        elif st.session_state.page == "Music Player":
+            music_player_page()
+        elif st.session_state.page == "Games":
+            games_page()
+        elif st.session_state.page == "Study Hub":
+            study_hub_page()
+        elif st.session_state.page == "Chat & Groups":
+            chat_page()
+        elif st.session_state.page == "Profile":
+            profile_page()
+
+# This should be the very last line of your file
+if __name__ == "__main__":
+    main()
