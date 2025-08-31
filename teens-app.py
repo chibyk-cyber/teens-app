@@ -852,7 +852,7 @@ def profile_page():
             if supabase_client and 'id' in st.session_state.profile:
                 try:
                     supabase_client
-        except st.button("Update Profile"):
+        if st.button("Update Profile"):
             # Update in Supabase if available
             if supabase_client and 'id' in st.session_state.profile:
                 try:
@@ -915,5 +915,6 @@ def main():
 # This should be the very last line of your file
 if __name__ == "__main__":
     main()
+
 
 
