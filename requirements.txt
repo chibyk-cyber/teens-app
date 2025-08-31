@@ -1,4 +1,6 @@
 streamlit==1.28.0
 supabase==1.0.3
 python-dotenv==1.0.0
-streamlit-option-menu==0.3.2
+streamlit-option-menu==0.3.2  # For better navigation menus
+watchdog==3.0.0  # For file system events
+requests==2.31.0  # For HTTP requests
