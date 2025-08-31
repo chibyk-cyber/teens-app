@@ -77,12 +77,12 @@ def init_supabase():
         # Fallback to environment variables
         SUPABASE_URL = os.getenv("SUPABASE_URL")
         SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-    
     if not SUPABASE_URL or not SUPABASE_KEY:
         st.error("Supabase credentials not found. Please check your configuration.")
         return None
     
     try:
+    
         client = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
         return client
     except Exception as e:
@@ -851,11 +851,6 @@ def profile_page():
             # Update in Supabase if available
             if supabase_client and 'id' in st.session_state.profile:
                 try:
-                    supabase_client
-        if st.button("Update Profile"):
-            # Update in Supabase if available
-            if supabase_client and 'id' in st.session_state.profile:
-                try:
                     supabase_client.table("profiles").update({
                         "username": new_username
                     }).eq("id", st.session_state.profile['id']).execute()
@@ -915,6 +910,7 @@ def main():
 # This should be the very last line of your file
 if __name__ == "__main__":
     main()
+
 
 
 
