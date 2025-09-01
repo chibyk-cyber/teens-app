@@ -1,17 +1,8 @@
 import streamlit as st
 import requests
-import os
 import random
 import time
 from datetime import datetime
-
-# Try to import supabase with error handling
-try:
-    import supabase
-    SUPABASE_AVAILABLE = True
-except ImportError:
-    SUPABASE_AVAILABLE = False
-    st.error("Supabase package not installed. Please install it with: pip install supabase")
 
 # Page configuration
 st.set_page_config(
@@ -105,24 +96,21 @@ st.markdown("""
         border-radius: 10px;
         margin-bottom: 10px;
     }
+    .online-status {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 5px;
+    }
+    .online {
+        background-color: #4CAF50;
+    }
+    .offline {
+        background-color: #ccc;
+    }
 </style>
 """, unsafe_allow_html=True)
-
-# Initialize Supabase client
-supabase_client = None
-if SUPABASE_AVAILABLE:
-    try:
-        # Get credentials from Streamlit secrets
-        SUPABASE_URL = st.secrets["supabase"]["url"]
-        SUPABASE_KEY = st.secrets["supabase"]["key"]
-        
-        if SUPABASE_URL and SUPABASE_KEY:
-            supabase_client = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
-            st.success("✅ Connected to Supabase successfully!")
-        else:
-            st.error("❌ Supabase credentials not found. Please check your secrets.")
-    except Exception as e:
-        st.error(f"❌ Could not connect to Supabase: {str(e)}")
 
 # Initialize session state
 if 'user' not in st.session_state:
@@ -153,6 +141,10 @@ if 'new_message' not in st.session_state:
     st.session_state.new_message = ""
 if 'auto_refresh' not in st.session_state:
     st.session_state.auto_refresh = True
+if 'user_search' not in st.session_state:
+    st.session_state.user_search = ""
+if 'group_search' not in st.session_state:
+    st.session_state.group_search = ""
 
 # Bible API functions
 def get_bible_books():
@@ -341,164 +333,57 @@ def get_chat_users():
     """Get list of users for chatting"""
     # In a real app, this would come from the database
     # For demo purposes, we'll use some sample users
-    # Chat & Groups page
-@require_auth
-def chat_page():
-    st.markdown('<h1 class="sub-header">💬 Chat & Groups</h1>', unsafe_allow_html=True)
-    
-    tab1, tab2, tab3 = st.tabs(["Direct Messages", "Study Groups", "Create Group"])
-    
-    with tab1:
-        st.subheader("Chat with Friends")
-        
-        # SEARCH FUNCTIONALITY ADDED HERE
-        search_term = st.text_input("🔍 Search users by name or code", key="user_search")
-        
-        # Get users for chatting
-        if not st.session_state.chat_users:
-            st.session_state.chat_users = get_chat_users()
-        
-        col1, col2 = st.columns([1, 2])
-        
-        with col1:
-            st.write("### Contacts")
-            
-            # Filter users based on search
-            filtered_users = st.session_state.chat_users
-            
-            if search_term:
-                filtered_users = [
-                    user for user in st.session_state.chat_users 
-                    if (search_term.lower() in user['username'].lower() or 
-                        search_term in user['number'])
-                ]
-            
-            if not filtered_users and search_term:
-                st.info("No users found. Try a different search term.")
-            elif not filtered_users:
-                st.info("No contacts available. Join groups to meet people!")
-            
-            for user in filtered_users:
-                status = "🟢" if user['online'] else "⚪"
-                if st.button(f"{status} {user['username']} (#{user['number']})", 
-                            key=f"user_{user['id']}", use_container_width=True):
-                    st.session_state.current_chat = user['id']
-                    st.session_state.chat_messages = get_chat_messages(user['id'])
-                    st.rerun()
-        
-        with col2:
-            if st.session_state.current_chat:
-                # Get current chat user
-                current_user = next((u for u in st.session_state.chat_users if u['id'] == st.session_state.current_chat), None)
-                
-                if current_user:
-                    st.write(f"### Chat with {current_user['username']}")
-                    
-                    # Chat container
-                    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-                    
-                    # Display messages
-                    for msg in st.session_state.chat_messages:
-                        if msg['type'] == 'sent':
-                            st.markdown(f'<div class="chat-message user-message"><p>{msg["text"]}</p><p class="message-time">{msg["timestamp"]}</p></div>', unsafe_allow_html=True)
-                        else:
-                            st.markdown(f'<div class="chat-message other-message"><p>{msg["text"]}</p><p class="message-time">{msg["timestamp"]}</p></div>', unsafe_allow_html=True)
-                    
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    # Message input
-                    col21, col22 = st.columns([4, 1])
-                    with col21:
-                        new_message = st.text_input("Type your message:", value=st.session_state.new_message, key="message_input")
-                    with col22:
-                        if st.button("Send", use_container_width=True):
-                            if new_message.strip():
-                                send_message(st.session_state.current_chat, new_message)
-                            else:
-                                st.warning("Please enter a message")
-            else:
-                st.info("Select a contact to start chatting")
-    
-    with tab2:
-        st.subheader("Study Groups")
-        
-        # SEARCH FOR GROUPS TOO!
-        group_search = st.text_input("🔍 Search groups by name or subject", key="group_search")
-        
-        # Get study groups
-        if not st.session_state.study_groups:
-            st.session_state.study_groups = get_study_groups()
-        
-        filtered_groups = st.session_state.study_groups
-        if group_search:
-            filtered_groups = [
-                group for group in st.session_state.study_groups
-                if (group_search.lower() in group['name'].lower() or 
-                    group_search.lower() in group['subject'].lower())
-            ]
-        
-        if not filtered_groups and group_search:
-            st.info("No groups found. Try a different search term.")
-        
-        for group in filtered_groups:
-            with st.expander(f"{group['name']} - {group['subject']} ({group['members']} members)"):
-                st.write(f"Topic: {group.get('description', 'General study group')}")
-                if st.button("Join Group", key=f"join_{group['id']}"):
-                    st.success(f"You've joined {group['name']}!")
-                if st.button("View Chat", key=f"view_{group['id']}"):
-                    st.session_state.current_chat = group['id']
-                    st.session_state.chat_messages = get_chat_messages(group['id'], "group")
-                    st.rerun()
-    
-    with tab3:
-        st.subheader("Create a Study Group")
-        
-        with st.form("create_group_form"):
-            group_name = st.text_input("Group Name")
-            group_subject = st.selectbox("Subject", get_waec_subjects())
-            group_description = st.text_area("Description")
-            
-            if st.form_submit_button("Create Group"):
-                if group_name and group_subject:
-                    new_group = create_study_group(group_name, group_subject, group_description)
-                    st.success(f"Group '{new_group['name']}' created successfully!")
-                    st.session_state.study_groups.append(new_group)
-                else:
-                    st.error("Please provide a group name and subject")
     return [
         {"id": "user2", "username": "Grace", "number": "1234", "online": True},
         {"id": "user3", "username": "David", "number": "5678", "online": False},
         {"id": "user4", "username": "Sarah", "number": "9012", "online": True},
-        {"id": "user5", "username": "Michael", "number": "3456", "online": True}
+        {"id": "user5", "username": "Michael", "number": "3456", "online": True},
+        {"id": "user6", "username": "Ruth", "number": "7890", "online": False},
+        {"id": "user7", "username": "Daniel", "number": "2468", "online": True}
     ]
 
 def get_study_groups():
     """Get list of study groups"""
     return [
-        {"id": "group1", "name": "Math Study Group", "members": 5, "subject": "Mathematics"},
-        {"id": "group2", "name": "Science Club", "members": 8, "subject": "Science"},
-        {"id": "group3", "name": "Bible Study", "members": 12, "subject": "Religion"},
-        {"id": "group4", "name": "English Literature", "members": 6, "subject": "English"}
+        {"id": "group1", "name": "Math Study Group", "members": 5, "subject": "Mathematics", "description": "Working through WAEC math problems together"},
+        {"id": "group2", "name": "Science Club", "members": 8, "subject": "Science", "description": "Exploring physics, chemistry and biology concepts"},
+        {"id": "group3", "name": "Bible Study", "members": 12, "subject": "Religion", "description": "Weekly Bible study and discussion"},
+        {"id": "group4", "name": "English Literature", "members": 6, "subject": "English", "description": "Analyzing literature and improving writing skills"},
+        {"id": "group5", "name": "History Buffs", "members": 4, "subject": "History", "description": "Exploring historical events and their impact"}
     ]
 
 def get_chat_messages(chat_id, chat_type="user"):
     """Get chat messages from database"""
     # In a real app, this would query the database
     # For demo, we'll return sample messages
-    sample_messages = [
-        {"id": "1", "sender": "user2", "text": "Hey there! How are you doing?", "timestamp": "2023-05-15 10:30:15", "type": "received"},
-        {"id": "2", "sender": "me", "text": "I'm good, thanks! Working on my math homework.", "timestamp": "2023-05-15 10:32:45", "type": "sent"},
-        {"id": "3", "sender": "user2", "text": "Need any help? I finished that assignment yesterday.", "timestamp": "2023-05-15 10:33:20", "type": "received"},
-        {"id": "4", "sender": "me", "text": "That would be great! Can you explain problem 5?", "timestamp": "2023-05-15 10:35:10", "type": "sent"},
-        {"id": "5", "sender": "user2", "text": "Sure! It's about quadratic equations. Let me send you my notes.", "timestamp": "2023-05-15 10:36:30", "type": "received"}
-    ]
+    sample_messages = {
+        "user2": [
+            {"id": "1", "sender": "user2", "text": "Hey there! How are you doing?", "timestamp": "2023-05-15 10:30:15", "type": "received"},
+            {"id": "2", "sender": "me", "text": "I'm good, thanks! Working on my math homework.", "timestamp": "2023-05-15 10:32:45", "type": "sent"},
+            {"id": "3", "sender": "user2", "text": "Need any help? I finished that assignment yesterday.", "timestamp": "2023-05-15 10:33:20", "type": "received"},
+            {"id": "4", "sender": "me", "text": "That would be great! Can you explain problem 5?", "timestamp": "2023-05-15 10:35:10", "type": "sent"},
+            {"id": "5", "sender": "user2", "text": "Sure! It's about quadratic equations. Let me send you my notes.", "timestamp": "2023-05-15 10:36:30", "type": "received"}
+        ],
+        "user3": [
+            {"id": "1", "sender": "me", "text": "Hi David, did you understand the physics assignment?", "timestamp": "2023-05-14 15:20:10", "type": "sent"},
+            {"id": "2", "sender": "user3", "text": "Most of it, but I'm stuck on question 3 about momentum.", "timestamp": "2023-05-14 15:25:45", "type": "received"},
+            {"id": "3", "sender": "me", "text": "I can help with that. Momentum is mass times velocity.", "timestamp": "2023-05-14 15:30:20", "type": "sent"}
+        ],
+        "user4": [
+            {"id": "1", "sender": "user4", "text": "Are you joining the Bible study group tomorrow?", "timestamp": "2023-05-13 18:45:30", "type": "received"},
+            {"id": "2", "sender": "me", "text": "Yes, I'll be there! What's the topic?", "timestamp": "2023-05-13 18:50:15", "type": "sent"},
+            {"id": "3", "sender": "user4", "text": "We're discussing the book of Romans chapter 8.", "timestamp": "2023-05-13 18:52:40", "type": "received"}
+        ],
+        "group1": [
+            {"id": "1", "sender": "Grace", "text": "Welcome to the Math Study Group!", "timestamp": "2023-05-10 09:15:20", "type": "received"},
+            {"id": "2", "sender": "Michael", "text": "Does anyone understand calculus problems?", "timestamp": "2023-05-10 09:20:35", "type": "received"},
+            {"id": "3", "sender": "me", "text": "I can help with calculus. What specific problem?", "timestamp": "2023-05-10 09:25:10", "type": "sent"},
+            {"id": "4", "sender": "Sarah", "text": "I need help with geometry proofs.", "timestamp": "2023-05-10 09:30:45", "type": "received"}
+        ]
+    }
     
-    # Filter messages based on chat_id (in a real app, this would be a database query)
-    if chat_id == "user2":
-        return sample_messages
-    else:
-        # Return fewer messages for other chats
-        return sample_messages[:2]
+    # Return messages if available, otherwise return empty list
+    return sample_messages.get(chat_id, [])
 
 def send_message(chat_id, message_text, chat_type="user"):
     """Send a message to a chat"""
@@ -515,13 +400,21 @@ def send_message(chat_id, message_text, chat_type="user"):
     st.session_state.chat_messages.append(new_message)
     
     # Simulate a response after a short delay
-    if chat_type == "user" and chat_id == "user2":
+    if chat_type == "user" and chat_id in ["user2", "user3", "user4"]:
         # Auto-reply from the other user
         time.sleep(1)
+        
+        # Different responses based on who we're chatting with
+        responses = {
+            "user2": "Thanks for your message! I'll get back to you soon.",
+            "user3": "I appreciate your message. Let me check my notes and I'll respond.",
+            "user4": "Got your message! I'll respond when I finish my current task."
+        }
+        
         response_message = {
             "id": str(int(time.time()) + 1),
             "sender": chat_id,
-            "text": "Thanks for your message! I'll get back to you soon.",
+            "text": responses.get(chat_id, "Thanks for your message!"),
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "type": "received"
         }
@@ -565,69 +458,42 @@ def search_worship_songs(query):
     
     return [song for song in worship_songs if query.lower() in song['title'].lower() or query.lower() in song['artist'].lower()]
 
-# Authentication functions with FULL Supabase integration
+# Authentication functions (simplified for demo)
 def sign_up(email, password, username, number):
     try:
-        if not supabase_client:
-            return False, "Supabase not configured. Please check your settings."
-        
-        # Create user with Supabase Auth
-        auth_response = supabase_client.auth.sign_up({
-            "email": email,
-            "password": password,
-        })
-        
-        if auth_response.user:
-            # Create profile in profiles table
-            profile_response = supabase_client.table("profiles").insert({
-                "id": auth_response.user.id,
-                "username": username,
-                "number": number
-            }).execute()
-            
-            # Get the created profile
-            if profile_response.data:
-                st.session_state.profile = profile_response.data[0]
-                st.session_state.user = auth_response.user
-                return True, "Sign up successful! Please check your email to verify your account."
-            else:
-                return False, "Error creating profile."
-        else:
-            return False, "Error creating account."
+        # Simulate successful signup
+        st.session_state.profile = {
+            "id": f"user{random.randint(1000, 9999)}",
+            "username": username,
+            "number": number,
+            "email": email
+        }
+        st.session_state.user = {"id": st.session_state.profile["id"]}
+        return True, "Sign up successful!"
     
     except Exception as e:
         return False, f"Error: {str(e)}"
 
 def sign_in(email, password):
     try:
-        if not supabase_client:
-            return False, "Supabase not configured. Please check your settings."
-        
-        response = supabase_client.auth.sign_in_with_password({
-            "email": email,
-            "password": password
-        })
-        
-        if response.user:
-            st.session_state.user = response.user
-            
-            # Get user profile
-            profile = supabase_client.table("profiles").select("*").eq("id", response.user.id).execute()
-            if profile.data:
-                st.session_state.profile = profile.data[0]
-                return True, "Login successful!"
-            else:
-                return False, "Profile not found. Please contact support."
+        # Simulate successful login
+        if email and password:
+            st.session_state.profile = {
+                "id": "user1",
+                "username": "CurrentUser",
+                "number": "1001",
+                "email": email
+            }
+            st.session_state.user = {"id": st.session_state.profile["id"]}
+            return True, "Login successful!"
         else:
-            return False, "Login failed. Please check your credentials."
+            return False, "Please enter email and password"
     
     except Exception as e:
         return False, f"Error: {str(e)}"
 
 def sign_out():
     try:
-        if supabase_client:
-            supabase_client.auth.sign_out()
         st.session_state.user = None
         st.session_state.profile = {}
         st.session_state.page = 'Home'
@@ -644,20 +510,6 @@ def sign_out():
         st.error(f"Error signing out: {str(e)}")
 
 def check_auth():
-    if 'user' not in st.session_state:
-        # Try to get the current session from Supabase
-        if supabase_client:
-            try:
-                session = supabase_client.auth.get_session()
-                if session:
-                    st.session_state.user = session.user
-                    # Get user profile
-                    profile = supabase_client.table("profiles").select("*").eq("id", session.user.id).execute()
-                    if profile.data:
-                        st.session_state.profile = profile.data[0]
-            except:
-                pass
-    
     return st.session_state.user is not None
 
 # Authentication wrapper
@@ -722,7 +574,6 @@ def navigation():
         
         st.title(f"👋 Hi, {username}!")
         st.write(f"Your code: #{user_code}")
-        st.caption("🔐 Authenticated via Supabase")
         
         st.divider()
         
@@ -775,7 +626,8 @@ def home_page():
         # Show recent messages preview
         if st.session_state.chat_messages:
             recent_msg = st.session_state.chat_messages[-1]
-            st.write(f"From: {recent_msg['sender']}")
+            sender_name = "You" if recent_msg['type'] == 'sent' else recent_msg['sender']
+            st.write(f"From: {sender_name}")
             st.write(f"Message: {recent_msg['text'][:30]}...")
         else:
             st.write("No recent messages")
@@ -886,9 +738,8 @@ def daily_devotional_page():
     st.subheader("Reflection Questions")
     st.write("1. What does this verse mean to you personally?")
     st.write("2. How can you apply this verse in your life today?")
-    st.write("3. What is God trying to tell you through this scripture?")
-    
-    # Journaling space
+    st.write("3. What is God trying to tell you through this)
+# Daily Devotional page (continued)
     st.subheader("Journal Your Thoughts")
     journal_entry = st.text_area("Write your reflections here:", height=150, key="devotional_journal")
     
@@ -1123,6 +974,9 @@ def chat_page():
     with tab1:
         st.subheader("Chat with Friends")
         
+        # SEARCH FUNCTIONALITY ADDED HERE
+        search_term = st.text_input("🔍 Search users by name or code", key="user_search")
+        
         # Get users for chatting
         if not st.session_state.chat_users:
             st.session_state.chat_users = get_chat_users()
@@ -1131,9 +985,26 @@ def chat_page():
         
         with col1:
             st.write("### Contacts")
-            for user in st.session_state.chat_users:
-                status = "🟢" if user['online'] else "⚪"
-                if st.button(f"{status} {user['username']} (#{user['number']})", key=f"user_{user['id']}"):
+            
+            # Filter users based on search
+            filtered_users = st.session_state.chat_users
+            
+            if search_term:
+                filtered_users = [
+                    user for user in st.session_state.chat_users 
+                    if (search_term.lower() in user['username'].lower() or 
+                        search_term in user['number'])
+                ]
+            
+            if not filtered_users and search_term:
+                st.info("No users found. Try a different search term.")
+            elif not filtered_users:
+                st.info("No contacts available. Join groups to meet people!")
+            
+            for user in filtered_users:
+                status_indicator = "🟢" if user['online'] else "⚪"
+                if st.button(f"{status_indicator} {user['username']} (#{user['number']})", 
+                            key=f"user_{user['id']}", use_container_width=True):
                     st.session_state.current_chat = user['id']
                     st.session_state.chat_messages = get_chat_messages(user['id'])
                     st.rerun()
@@ -1174,11 +1045,25 @@ def chat_page():
     with tab2:
         st.subheader("Study Groups")
         
+        # SEARCH FOR GROUPS TOO!
+        group_search = st.text_input("🔍 Search groups by name or subject", key="group_search")
+        
         # Get study groups
         if not st.session_state.study_groups:
             st.session_state.study_groups = get_study_groups()
         
-        for group in st.session_state.study_groups:
+        filtered_groups = st.session_state.study_groups
+        if group_search:
+            filtered_groups = [
+                group for group in st.session_state.study_groups
+                if (group_search.lower() in group['name'].lower() or 
+                    group_search.lower() in group['subject'].lower())
+            ]
+        
+        if not filtered_groups and group_search:
+            st.info("No groups found. Try a different search term.")
+        
+        for group in filtered_groups:
             with st.expander(f"{group['name']} - {group['subject']} ({group['members']} members)"):
                 st.write(f"Topic: {group.get('description', 'General study group')}")
                 if st.button("Join Group", key=f"join_{group['id']}"):
@@ -1222,15 +1107,6 @@ def profile_page():
         new_username = st.text_input("New Username", value=st.session_state.profile.get('username', ''))
         
         if st.button("Update Profile"):
-            # Update in Supabase if available
-            if supabase_client and 'id' in st.session_state.profile:
-                try:
-                    supabase_client.table("profiles").update({
-                        "username": new_username
-                    }).eq("id", st.session_state.profile['id']).execute()
-                except Exception as e:
-                    st.warning(f"Could not update Supabase: {e}")
-            
             # Update in session state
             st.session_state.profile['username'] = new_username
             st.success("Profile updated successfully!")
@@ -1258,16 +1134,7 @@ def profile_page():
 
 # Main app logic
 def main():
-    if not supabase_client:
-        st.error("""
-        ## Supabase not configured
-        Please make sure you have:
-        1. Added your Supabase URL and key to Streamlit secrets
-        2. Installed the supabase package: `pip install supabase`
-        3. Created the required tables in Supabase
-        """)
-        return
-    
+    # Check if user is authenticated
     if not check_auth():
         login_page()
     else:
@@ -1292,4 +1159,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
