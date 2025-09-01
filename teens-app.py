@@ -341,6 +341,130 @@ def get_chat_users():
     """Get list of users for chatting"""
     # In a real app, this would come from the database
     # For demo purposes, we'll use some sample users
+    # Chat & Groups page
+@require_auth
+def chat_page():
+    st.markdown('<h1 class="sub-header">💬 Chat & Groups</h1>', unsafe_allow_html=True)
+    
+    tab1, tab2, tab3 = st.tabs(["Direct Messages", "Study Groups", "Create Group"])
+    
+    with tab1:
+        st.subheader("Chat with Friends")
+        
+        # SEARCH FUNCTIONALITY ADDED HERE
+        search_term = st.text_input("🔍 Search users by name or code", key="user_search")
+        
+        # Get users for chatting
+        if not st.session_state.chat_users:
+            st.session_state.chat_users = get_chat_users()
+        
+        col1, col2 = st.columns([1, 2])
+        
+        with col1:
+            st.write("### Contacts")
+            
+            # Filter users based on search
+            filtered_users = st.session_state.chat_users
+            
+            if search_term:
+                filtered_users = [
+                    user for user in st.session_state.chat_users 
+                    if (search_term.lower() in user['username'].lower() or 
+                        search_term in user['number'])
+                ]
+            
+            if not filtered_users and search_term:
+                st.info("No users found. Try a different search term.")
+            elif not filtered_users:
+                st.info("No contacts available. Join groups to meet people!")
+            
+            for user in filtered_users:
+                status = "🟢" if user['online'] else "⚪"
+                if st.button(f"{status} {user['username']} (#{user['number']})", 
+                            key=f"user_{user['id']}", use_container_width=True):
+                    st.session_state.current_chat = user['id']
+                    st.session_state.chat_messages = get_chat_messages(user['id'])
+                    st.rerun()
+        
+        with col2:
+            if st.session_state.current_chat:
+                # Get current chat user
+                current_user = next((u for u in st.session_state.chat_users if u['id'] == st.session_state.current_chat), None)
+                
+                if current_user:
+                    st.write(f"### Chat with {current_user['username']}")
+                    
+                    # Chat container
+                    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+                    
+                    # Display messages
+                    for msg in st.session_state.chat_messages:
+                        if msg['type'] == 'sent':
+                            st.markdown(f'<div class="chat-message user-message"><p>{msg["text"]}</p><p class="message-time">{msg["timestamp"]}</p></div>', unsafe_allow_html=True)
+                        else:
+                            st.markdown(f'<div class="chat-message other-message"><p>{msg["text"]}</p><p class="message-time">{msg["timestamp"]}</p></div>', unsafe_allow_html=True)
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    # Message input
+                    col21, col22 = st.columns([4, 1])
+                    with col21:
+                        new_message = st.text_input("Type your message:", value=st.session_state.new_message, key="message_input")
+                    with col22:
+                        if st.button("Send", use_container_width=True):
+                            if new_message.strip():
+                                send_message(st.session_state.current_chat, new_message)
+                            else:
+                                st.warning("Please enter a message")
+            else:
+                st.info("Select a contact to start chatting")
+    
+    with tab2:
+        st.subheader("Study Groups")
+        
+        # SEARCH FOR GROUPS TOO!
+        group_search = st.text_input("🔍 Search groups by name or subject", key="group_search")
+        
+        # Get study groups
+        if not st.session_state.study_groups:
+            st.session_state.study_groups = get_study_groups()
+        
+        filtered_groups = st.session_state.study_groups
+        if group_search:
+            filtered_groups = [
+                group for group in st.session_state.study_groups
+                if (group_search.lower() in group['name'].lower() or 
+                    group_search.lower() in group['subject'].lower())
+            ]
+        
+        if not filtered_groups and group_search:
+            st.info("No groups found. Try a different search term.")
+        
+        for group in filtered_groups:
+            with st.expander(f"{group['name']} - {group['subject']} ({group['members']} members)"):
+                st.write(f"Topic: {group.get('description', 'General study group')}")
+                if st.button("Join Group", key=f"join_{group['id']}"):
+                    st.success(f"You've joined {group['name']}!")
+                if st.button("View Chat", key=f"view_{group['id']}"):
+                    st.session_state.current_chat = group['id']
+                    st.session_state.chat_messages = get_chat_messages(group['id'], "group")
+                    st.rerun()
+    
+    with tab3:
+        st.subheader("Create a Study Group")
+        
+        with st.form("create_group_form"):
+            group_name = st.text_input("Group Name")
+            group_subject = st.selectbox("Subject", get_waec_subjects())
+            group_description = st.text_area("Description")
+            
+            if st.form_submit_button("Create Group"):
+                if group_name and group_subject:
+                    new_group = create_study_group(group_name, group_subject, group_description)
+                    st.success(f"Group '{new_group['name']}' created successfully!")
+                    st.session_state.study_groups.append(new_group)
+                else:
+                    st.error("Please provide a group name and subject")
     return [
         {"id": "user2", "username": "Grace", "number": "1234", "online": True},
         {"id": "user3", "username": "David", "number": "5678", "online": False},
@@ -1168,3 +1292,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
