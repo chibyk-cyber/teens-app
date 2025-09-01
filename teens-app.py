@@ -738,7 +738,7 @@ def daily_devotional_page():
     st.subheader("Reflection Questions")
     st.write("1. What does this verse mean to you personally?")
     st.write("2. How can you apply this verse in your life today?")
-    st.write("3. What is God trying to tell you through this)
+    st.write("3. What is God trying to tell you through this?")
 # Daily Devotional page (continued)
     st.subheader("Journal Your Thoughts")
     journal_entry = st.text_area("Write your reflections here:", height=150, key="devotional_journal")
@@ -1159,3 +1159,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
