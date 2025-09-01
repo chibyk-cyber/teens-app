@@ -130,7 +130,7 @@ if 'waec_subject' not in st.session_state:
 if 'waec_year' not in st.session_state:
     st.session_state.waec_year = "2023"
 if 'chat_messages' not in st.session_state:
-    st.session_state.chat_messages = []
+    st.session_state.chat_messages = {}
 if 'current_chat' not in st.session_state:
     st.session_state.current_chat = None
 if 'chat_users' not in st.session_state:
@@ -145,6 +145,8 @@ if 'user_search' not in st.session_state:
     st.session_state.user_search = ""
 if 'group_search' not in st.session_state:
     st.session_state.group_search = ""
+if 'message_count' not in st.session_state:
+    st.session_state.message_count = 0
 
 # Bible API functions
 def get_bible_books():
@@ -354,42 +356,50 @@ def get_study_groups():
 
 def get_chat_messages(chat_id, chat_type="user"):
     """Get chat messages from database"""
-    # In a real app, this would query the database
-    # For demo, we'll return sample messages
-    sample_messages = {
-        "user2": [
-            {"id": "1", "sender": "user2", "text": "Hey there! How are you doing?", "timestamp": "2023-05-15 10:30:15", "type": "received"},
-            {"id": "2", "sender": "me", "text": "I'm good, thanks! Working on my math homework.", "timestamp": "2023-05-15 10:32:45", "type": "sent"},
-            {"id": "3", "sender": "user2", "text": "Need any help? I finished that assignment yesterday.", "timestamp": "2023-05-15 10:33:20", "type": "received"},
-            {"id": "4", "sender": "me", "text": "That would be great! Can you explain problem 5?", "timestamp": "2023-05-15 10:35:10", "type": "sent"},
-            {"id": "5", "sender": "user2", "text": "Sure! It's about quadratic equations. Let me send you my notes.", "timestamp": "2023-05-15 10:36:30", "type": "received"}
-        ],
-        "user3": [
-            {"id": "1", "sender": "me", "text": "Hi David, did you understand the physics assignment?", "timestamp": "2023-05-14 15:20:10", "type": "sent"},
-            {"id": "2", "sender": "user3", "text": "Most of it, but I'm stuck on question 3 about momentum.", "timestamp": "2023-05-14 15:25:45", "type": "received"},
-            {"id": "3", "sender": "me", "text": "I can help with that. Momentum is mass times velocity.", "timestamp": "2023-05-14 15:30:20", "type": "sent"}
-        ],
-        "user4": [
-            {"id": "1", "sender": "user4", "text": "Are you joining the Bible study group tomorrow?", "timestamp": "2023-05-13 18:45:30", "type": "received"},
-            {"id": "2", "sender": "me", "text": "Yes, I'll be there! What's the topic?", "timestamp": "2023-05-13 18:50:15", "type": "sent"},
-            {"id": "3", "sender": "user4", "text": "We're discussing the book of Romans chapter 8.", "timestamp": "2023-05-13 18:52:40", "type": "received"}
-        ],
-        "group1": [
-            {"id": "1", "sender": "Grace", "text": "Welcome to the Math Study Group!", "timestamp": "2023-05-10 09:15:20", "type": "received"},
-            {"id": "2", "sender": "Michael", "text": "Does anyone understand calculus problems?", "timestamp": "2023-05-10 09:20:35", "type": "received"},
-            {"id": "3", "sender": "me", "text": "I can help with calculus. What specific problem?", "timestamp": "2023-05-10 09:25:10", "type": "sent"},
-            {"id": "4", "sender": "Sarah", "text": "I need help with geometry proofs.", "timestamp": "2023-05-10 09:30:45", "type": "received"}
-        ]
-    }
+    # Initialize chat messages if not exists
+    if chat_id not in st.session_state.chat_messages:
+        # Sample messages for different chats
+        sample_messages = {
+            "user2": [
+                {"id": "1", "sender": "user2", "text": "Hey there! How are you doing?", "timestamp": "2023-05-15 10:30:15", "type": "received"},
+                {"id": "2", "sender": "me", "text": "I'm good, thanks! Working on my math homework.", "timestamp": "2023-05-15 10:32:45", "type": "sent"},
+                {"id": "3", "sender": "user2", "text": "Need any help? I finished that assignment yesterday.", "timestamp": "2023-05-15 10:33:20", "type": "received"},
+                {"id": "4", "sender": "me", "text": "That would be great! Can you explain problem 5?", "timestamp": "2023-05-15 10:35:10", "type": "sent"},
+                {"id": "5", "sender": "user2", "text": "Sure! It's about quadratic equations. Let me send you my notes.", "timestamp": "2023-05-15 10:36:30", "type": "received"}
+            ],
+            "user3": [
+                {"id": "1", "sender": "me", "text": "Hi David, did you understand the physics assignment?", "timestamp": "2023-05-14 15:20:10", "type": "sent"},
+                {"id": "2", "sender": "user3", "text": "Most of it, but I'm stuck on question 3 about momentum.", "timestamp": "2023-05-14 15:25:45", "type": "received"},
+                {"id": "3", "sender": "me", "text": "I can help with that. Momentum is mass times velocity.", "timestamp": "2023-05-14 15:30:20", "type": "sent"}
+            ],
+            "user4": [
+                {"id": "1", "sender": "user4", "text": "Are you joining the Bible study group tomorrow?", "timestamp": "2023-05-13 18:45:30", "type": "received"},
+                {"id": "2", "sender": "me", "text": "Yes, I'll be there! What's the topic?", "timestamp": "2023-05-13 18:50:15", "type": "sent"},
+                {"id": "3", "sender": "user4", "text": "We're discussing the book of Romans chapter 8.", "timestamp": "2023-05-13 18:52:40", "type": "received"}
+            ],
+            "group1": [
+                {"id": "1", "sender": "Grace", "text": "Welcome to the Math Study Group!", "timestamp": "2023-05-10 09:15:20", "type": "received"},
+                {"id": "2", "sender": "Michael", "text": "Does anyone understand calculus problems?", "timestamp": "2023-05-10 09:20:35", "type": "received"},
+                {"id": "3", "sender": "me", "text": "I can help with calculus. What specific problem?", "timestamp": "2023-05-10 09:25:10", "type": "sent"},
+                {"id": "4", "sender": "Sarah", "text": "I need help with geometry proofs.", "timestamp": "2023-05-10 09:30:45", "type": "received"}
+            ]
+        }
+        
+        # Return messages if available, otherwise return empty list
+        st.session_state.chat_messages[chat_id] = sample_messages.get(chat_id, [])
     
-    # Return messages if available, otherwise return empty list
-    return sample_messages.get(chat_id, [])
+    return st.session_state.chat_messages[chat_id]
 
 def send_message(chat_id, message_text, chat_type="user"):
     """Send a message to a chat"""
-    # In a real app, this would save to the database
+    # Ensure chat messages exist for this chat
+    if chat_id not in st.session_state.chat_messages:
+        st.session_state.chat_messages[chat_id] = []
+    
+    # Create new message
+    st.session_state.message_count += 1
     new_message = {
-        "id": str(int(time.time())),
+        "id": str(st.session_state.message_count),
         "sender": "me",
         "text": message_text,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -397,7 +407,7 @@ def send_message(chat_id, message_text, chat_type="user"):
     }
     
     # Add to current messages
-    st.session_state.chat_messages.append(new_message)
+    st.session_state.chat_messages[chat_id].append(new_message)
     
     # Simulate a response after a short delay
     if chat_type == "user" and chat_id in ["user2", "user3", "user4"]:
@@ -411,14 +421,15 @@ def send_message(chat_id, message_text, chat_type="user"):
             "user4": "Got your message! I'll respond when I finish my current task."
         }
         
+        st.session_state.message_count += 1
         response_message = {
-            "id": str(int(time.time()) + 1),
+            "id": str(st.session_state.message_count),
             "sender": chat_id,
             "text": responses.get(chat_id, "Thanks for your message!"),
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "type": "received"
         }
-        st.session_state.chat_messages.append(response_message)
+        st.session_state.chat_messages[chat_id].append(response_message)
     
     # Clear the message input
     st.session_state.new_message = ""
@@ -502,9 +513,10 @@ def sign_out():
         st.session_state.lookup_verse = False
         st.session_state.waec_subject = "Mathematics"
         st.session_state.waec_year = "2023"
-        st.session_state.chat_messages = []
+        st.session_state.chat_messages = {}
         st.session_state.current_chat = None
         st.session_state.new_message = ""
+        st.session_state.message_count = 0
         st.rerun()
     except Exception as e:
         st.error(f"Error signing out: {str(e)}")
@@ -624,11 +636,15 @@ def home_page():
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("💬 Recent Messages")
         # Show recent messages preview
-        if st.session_state.chat_messages:
-            recent_msg = st.session_state.chat_messages[-1]
-            sender_name = "You" if recent_msg['type'] == 'sent' else recent_msg['sender']
-            st.write(f"From: {sender_name}")
-            st.write(f"Message: {recent_msg['text'][:30]}...")
+        if st.session_state.current_chat and st.session_state.current_chat in st.session_state.chat_messages:
+            messages = st.session_state.chat_messages[st.session_state.current_chat]
+            if messages:
+                recent_msg = messages[-1]
+                sender_name = "You" if recent_msg['type'] == 'sent' else recent_msg['sender']
+                st.write(f"From: {sender_name}")
+                st.write(f"Message: {recent_msg['text'][:30]}...")
+            else:
+                st.write("No recent messages")
         else:
             st.write("No recent messages")
         if st.button("Open Chats →"):
@@ -728,6 +744,10 @@ def music_player_page():
 # Daily Devotional page
 @require_auth
 def daily_devotional_page():
+    st.markdown('<h1 class="sub-header">
+# Daily Devotional page
+@require_auth
+def daily_devotional_page():
     st.markdown('<h1 class="sub-header">📅 Daily Devotional</h1>', unsafe_allow_html=True)
     
     # Display random verse
@@ -738,8 +758,9 @@ def daily_devotional_page():
     st.subheader("Reflection Questions")
     st.write("1. What does this verse mean to you personally?")
     st.write("2. How can you apply this verse in your life today?")
-    st.write("3. What is God trying to tell you through this?")
-# Daily Devotional page (continued)
+    st.write("3. What is God trying to tell you through this scripture?")
+    
+    # Journaling space
     st.subheader("Journal Your Thoughts")
     journal_entry = st.text_area("Write your reflections here:", height=150, key="devotional_journal")
     
@@ -1021,7 +1042,8 @@ def chat_page():
                     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
                     
                     # Display messages
-                    for msg in st.session_state.chat_messages:
+                    messages = get_chat_messages(st.session_state.current_chat)
+                    for msg in messages:
                         if msg['type'] == 'sent':
                             st.markdown(f'<div class="chat-message user-message"><p>{msg["text"]}</p><p class="message-time">{msg["timestamp"]}</p></div>', unsafe_allow_html=True)
                         else:
@@ -1159,4 +1181,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
