@@ -48,9 +48,15 @@ st.markdown("""
     .user-message {
         background-color: #DCF8C6;
         text-align: right;
+        margin-left: 20%;
     }
     .other-message {
         background-color: #F1F0F0;
+        margin-right: 20%;
+    }
+    .message-time {
+        font-size: 0.7rem;
+        color: #777;
     }
     .subject-card {
         background: linear-gradient(135deg, #6e8efb, #a777e3);
@@ -91,6 +97,14 @@ st.markdown("""
         border-radius: 5px;
         margin: 5px 0;
     }
+    .chat-container {
+        height: 400px;
+        overflow-y: auto;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        margin-bottom: 10px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -127,6 +141,18 @@ if 'waec_subject' not in st.session_state:
     st.session_state.waec_subject = "Mathematics"
 if 'waec_year' not in st.session_state:
     st.session_state.waec_year = "2023"
+if 'chat_messages' not in st.session_state:
+    st.session_state.chat_messages = []
+if 'current_chat' not in st.session_state:
+    st.session_state.current_chat = None
+if 'chat_users' not in st.session_state:
+    st.session_state.chat_users = []
+if 'study_groups' not in st.session_state:
+    st.session_state.study_groups = []
+if 'new_message' not in st.session_state:
+    st.session_state.new_message = ""
+if 'auto_refresh' not in st.session_state:
+    st.session_state.auto_refresh = True
 
 # Bible API functions
 def get_bible_books():
@@ -310,6 +336,93 @@ def get_study_resources(subject):
     
     return resources.get(subject, [{"title": "Resources coming soon", "type": "Info", "url": "#"}])
 
+# Chat functions
+def get_chat_users():
+    """Get list of users for chatting"""
+    # In a real app, this would come from the database
+    # For demo purposes, we'll use some sample users
+    return [
+        {"id": "user2", "username": "Grace", "number": "1234", "online": True},
+        {"id": "user3", "username": "David", "number": "5678", "online": False},
+        {"id": "user4", "username": "Sarah", "number": "9012", "online": True},
+        {"id": "user5", "username": "Michael", "number": "3456", "online": True}
+    ]
+
+def get_study_groups():
+    """Get list of study groups"""
+    return [
+        {"id": "group1", "name": "Math Study Group", "members": 5, "subject": "Mathematics"},
+        {"id": "group2", "name": "Science Club", "members": 8, "subject": "Science"},
+        {"id": "group3", "name": "Bible Study", "members": 12, "subject": "Religion"},
+        {"id": "group4", "name": "English Literature", "members": 6, "subject": "English"}
+    ]
+
+def get_chat_messages(chat_id, chat_type="user"):
+    """Get chat messages from database"""
+    # In a real app, this would query the database
+    # For demo, we'll return sample messages
+    sample_messages = [
+        {"id": "1", "sender": "user2", "text": "Hey there! How are you doing?", "timestamp": "2023-05-15 10:30:15", "type": "received"},
+        {"id": "2", "sender": "me", "text": "I'm good, thanks! Working on my math homework.", "timestamp": "2023-05-15 10:32:45", "type": "sent"},
+        {"id": "3", "sender": "user2", "text": "Need any help? I finished that assignment yesterday.", "timestamp": "2023-05-15 10:33:20", "type": "received"},
+        {"id": "4", "sender": "me", "text": "That would be great! Can you explain problem 5?", "timestamp": "2023-05-15 10:35:10", "type": "sent"},
+        {"id": "5", "sender": "user2", "text": "Sure! It's about quadratic equations. Let me send you my notes.", "timestamp": "2023-05-15 10:36:30", "type": "received"}
+    ]
+    
+    # Filter messages based on chat_id (in a real app, this would be a database query)
+    if chat_id == "user2":
+        return sample_messages
+    else:
+        # Return fewer messages for other chats
+        return sample_messages[:2]
+
+def send_message(chat_id, message_text, chat_type="user"):
+    """Send a message to a chat"""
+    # In a real app, this would save to the database
+    new_message = {
+        "id": str(int(time.time())),
+        "sender": "me",
+        "text": message_text,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "type": "sent"
+    }
+    
+    # Add to current messages
+    st.session_state.chat_messages.append(new_message)
+    
+    # Simulate a response after a short delay
+    if chat_type == "user" and chat_id == "user2":
+        # Auto-reply from the other user
+        time.sleep(1)
+        response_message = {
+            "id": str(int(time.time()) + 1),
+            "sender": chat_id,
+            "text": "Thanks for your message! I'll get back to you soon.",
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "type": "received"
+        }
+        st.session_state.chat_messages.append(response_message)
+    
+    # Clear the message input
+    st.session_state.new_message = ""
+    
+    # Rerun to update the UI
+    st.rerun()
+
+def create_study_group(name, subject, description):
+    """Create a new study group"""
+    new_group = {
+        "id": f"group{len(st.session_state.study_groups) + 1}",
+        "name": name,
+        "subject": subject,
+        "description": description,
+        "members": 1,
+        "created_by": st.session_state.profile.get('username', 'User')
+    }
+    
+    st.session_state.study_groups.append(new_group)
+    return new_group
+
 # Worship songs with actual playable audio URLs
 worship_songs = [
     {"title": "Amazing Grace", "artist": "Chris Tomlin", "url": "https://cdn.pixabay.com/download/audio/2022/01/20/audio_5c27c9508f.mp3?filename=amazing-grace-121002.mp3"},
@@ -399,6 +512,9 @@ def sign_out():
         st.session_state.lookup_verse = False
         st.session_state.waec_subject = "Mathematics"
         st.session_state.waec_year = "2023"
+        st.session_state.chat_messages = []
+        st.session_state.current_chat = None
+        st.session_state.new_message = ""
         st.rerun()
     except Exception as e:
         st.error(f"Error signing out: {str(e)}")
@@ -531,10 +647,16 @@ def home_page():
     
     with col3:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("📚 Study Tip")
-        st.write("Practice with past WAEC questions to improve your exam skills!")
-        if st.button("Study Now →"):
-            st.session_state.page = "Study Hub"
+        st.subheader("💬 Recent Messages")
+        # Show recent messages preview
+        if st.session_state.chat_messages:
+            recent_msg = st.session_state.chat_messages[-1]
+            st.write(f"From: {recent_msg['sender']}")
+            st.write(f"Message: {recent_msg['text'][:30]}...")
+        else:
+            st.write("No recent messages")
+        if st.button("Open Chats →"):
+            st.session_state.page = "Chat & Groups"
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -872,8 +994,91 @@ def games_page():
 def chat_page():
     st.markdown('<h1 class="sub-header">💬 Chat & Groups</h1>', unsafe_allow_html=True)
     
-    st.info("Chat & Groups feature coming soon!")
-    st.write("This section will include direct messaging and study group functionality.")
+    tab1, tab2, tab3 = st.tabs(["Direct Messages", "Study Groups", "Create Group"])
+    
+    with tab1:
+        st.subheader("Chat with Friends")
+        
+        # Get users for chatting
+        if not st.session_state.chat_users:
+            st.session_state.chat_users = get_chat_users()
+        
+        col1, col2 = st.columns([1, 2])
+        
+        with col1:
+            st.write("### Contacts")
+            for user in st.session_state.chat_users:
+                status = "🟢" if user['online'] else "⚪"
+                if st.button(f"{status} {user['username']} (#{user['number']})", key=f"user_{user['id']}"):
+                    st.session_state.current_chat = user['id']
+                    st.session_state.chat_messages = get_chat_messages(user['id'])
+                    st.rerun()
+        
+        with col2:
+            if st.session_state.current_chat:
+                # Get current chat user
+                current_user = next((u for u in st.session_state.chat_users if u['id'] == st.session_state.current_chat), None)
+                
+                if current_user:
+                    st.write(f"### Chat with {current_user['username']}")
+                    
+                    # Chat container
+                    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+                    
+                    # Display messages
+                    for msg in st.session_state.chat_messages:
+                        if msg['type'] == 'sent':
+                            st.markdown(f'<div class="chat-message user-message"><p>{msg["text"]}</p><p class="message-time">{msg["timestamp"]}</p></div>', unsafe_allow_html=True)
+                        else:
+                            st.markdown(f'<div class="chat-message other-message"><p>{msg["text"]}</p><p class="message-time">{msg["timestamp"]}</p></div>', unsafe_allow_html=True)
+                    
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    # Message input
+                    col21, col22 = st.columns([4, 1])
+                    with col21:
+                        new_message = st.text_input("Type your message:", value=st.session_state.new_message, key="message_input")
+                    with col22:
+                        if st.button("Send", use_container_width=True):
+                            if new_message.strip():
+                                send_message(st.session_state.current_chat, new_message)
+                            else:
+                                st.warning("Please enter a message")
+            else:
+                st.info("Select a contact to start chatting")
+    
+    with tab2:
+        st.subheader("Study Groups")
+        
+        # Get study groups
+        if not st.session_state.study_groups:
+            st.session_state.study_groups = get_study_groups()
+        
+        for group in st.session_state.study_groups:
+            with st.expander(f"{group['name']} - {group['subject']} ({group['members']} members)"):
+                st.write(f"Topic: {group.get('description', 'General study group')}")
+                if st.button("Join Group", key=f"join_{group['id']}"):
+                    st.success(f"You've joined {group['name']}!")
+                if st.button("View Chat", key=f"view_{group['id']}"):
+                    st.session_state.current_chat = group['id']
+                    st.session_state.chat_messages = get_chat_messages(group['id'], "group")
+                    st.rerun()
+    
+    with tab3:
+        st.subheader("Create a Study Group")
+        
+        with st.form("create_group_form"):
+            group_name = st.text_input("Group Name")
+            group_subject = st.selectbox("Subject", get_waec_subjects())
+            group_description = st.text_area("Description")
+            
+            if st.form_submit_button("Create Group"):
+                if group_name and group_subject:
+                    new_group = create_study_group(group_name, group_subject, group_description)
+                    st.success(f"Group '{new_group['name']}' created successfully!")
+                    st.session_state.study_groups.append(new_group)
+                else:
+                    st.error("Please provide a group name and subject")
 
 # Profile page
 @require_auth
@@ -925,6 +1130,7 @@ def profile_page():
         st.subheader("Achievements")
         st.write("🏆 Bible Scholar (Read 50 verses)")
         st.write("🏆 Math Whiz (Solved 100 problems)")
+        st.write("🏆 Social Butterfly (Sent 50 messages)")
 
 # Main app logic
 def main():
