@@ -744,7 +744,7 @@ def music_player_page():
 # Daily Devotional page
 @require_auth
 def daily_devotional_page():
-    st.markdown('<h1 class="sub-header">
+    st.markdown('<h1 class="sub-header>')
 # Daily Devotional page
 @require_auth
 def daily_devotional_page():
@@ -1181,3 +1181,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
