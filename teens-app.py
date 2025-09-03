@@ -666,7 +666,7 @@ def home_page():
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("📖 Bible Verse of the Day")
         verse_text, reference = get_random_verse()
-        st.markdown(f'<div class="bible-verse"><p>{verse}')S
+        st.markdown(f'<div class="bible-verse"><p>{verse}')
 # Home page
 @require_auth
 def home_page():
@@ -1272,4 +1272,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
