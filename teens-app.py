@@ -1,19 +1,152 @@
+# Home page
+@require_auth
+def home_page():
+    st.markdown('<h1 class="main-header">👥 TeenConnect</h1>', unsafe_allow_html=True)
+    st.markdown("### Welcome to your safe space for connection, inspiration, and fun!")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("📖 Bible Verse of the Day")
+        verse_text, reference = get_random_verse()
+        st.markdown(f'<div class="bible-verse"><p>{verse_text}</p><p>- {reference}</p></div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("🎵 Today's Playlist")
+        for song in worship_songs[:2]:
+            st.write(f"• {song['title']} - {song['artist']}")
+        if st.button("Open Music Player →"):
+            st.session_state.page = "Music Player"
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("💬 Recent Messages")
+        if st.session_state.current_chat and st.session_state.current_chat in st.session_state.chat_messages:
+            messages = st.session_state.chat_messages[st.session_state.current_chat]
+            if messages:
+                recent_msg = messages[-1]
+                sender_name = "You" if recent_msg['type'] == 'sent' else recent_msg['sender']
+                st.write(f"From: {sender_name}")
+                st.write(f"Message: {recent_msg['text'][:30]}...")
+        else:
+            st.write("No recent messages")
+        if st.button("Open Chats →"):
+            st.session_state.page = "Chat & Groups"
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# Bible Reader page
+@require_auth
+def bible_reader_page():
+    st.markdown('<h1 class="sub-header">📖 Bible Reader</h1>', unsafe_allow_html=True)
+    
+    bible_books = get_bible_books()
+    
+    col1, col2 = st.columns([1, 3])
+    
+    with col1:
+        selected_book = st.selectbox("Select Book", bible_books)
+        chapter = st.number_input("Chapter", min_value=1, max_value=150, value=1)
+        verse = st.number_input("Verse", min_value=1, max_value=176, value=1)
+        
+        if st.button("Lookup Verse"):
+            st.session_state.lookup_verse = True
+    
+    with col2:
+        if st.session_state.get('lookup_verse', False):
+            verse_text, reference = get_bible_verse(selected_book, chapter, verse)
+            st.markdown(f'<div class="bible-verse"><h3>{reference}</h3><p>{verse_text}</p></div>', unsafe_allow_html=True)
+            
+            col21, col22 = st.columns(2)
+            with col21:
+                if st.button("💾 Save to Favorites"):
+                    # Save to Supabase if available
+                    try:
+                        if supabase_client:
+                            supabase_client.table("saved_verses").insert({
+                                "user_id": st.session_state.user.id,
+                                "book": selected_book,
+                                "chapter": chapter,
+                                "verse": verse,
+                                "verse_text": verse_text,
+                                "reference": reference
+                            }).execute()
+                            st.success("Verse saved to favorites!")
+                        else:
+                            st.success("Verse saved to favorites! (Demo mode)")
+                    except Exception as e:
+                        st.error(f"Error saving verse: {str(e)}")
+            with col22:
+                if st.button("📤 Share Verse"):
+                    st.info("Sharing feature coming soon!")
+        else:
+            st.info("Select a book, chapter, and verse to begin reading.")
+
+# Music Player page
+@require_auth
+def music_player_page():
+    st.markdown('<h1 class="sub-header">🎶 Music Player</h1>', unsafe_allow_html=True)
+    
+    search_query = st.text_input("Search for worship songs")
+    songs = search_worship_songs(search_query)
+    
+    for i, song in enumerate(songs):
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.write(f"**{song['title']}**")
+            st.write(f"*{song['artist']}*")
+        with col2:
+            if st.button("▶️ Play", key=f"play_{i}"):
+                st.session_state.current_song = song
+                st.session_state.audio_playing = True
+                st.success(f"Playing: {song['title']}")
+    
+    if st.session_state.current_song:
+        st.markdown('<div class="music-player">', unsafe_allow_html=True)
+        st.subheader("🎵 Now Playing")
+        st.write(f"**{st.session_state.current_song['title']}** by {st.session_state.current_song['artist']}")
+        
+        st.audio(st.session_state.current_song['url'], format="audio/mp3")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("⏮ Previous"):
+                current_index = next((i for i, song in enumerate(worship_songs) if song['title'] == st.session_state.current_song['title']), 0)
+                prev_index = (current_index - 1) % len(worship_songs)
+                st.session_state.current_song = worship_songs[prev_index]
+                st.rerun()
+        with col2:
+            if st.button("⏸ Pause" if st.session_state.audio_playing else "▶️ Play"):
+                st.session_state.audio_playing = not st.session_state.audio_playing
+                st.rerun()
+        with col3:
+            if st.button("⏭ Next"):
+                current_index = next((i for i, song in enumerate(worship_songs) if song['title'] == st.session_state.current_song['title']), 0)
+                next_index = (current_index + 1) % len(worship_songs)
+                st.session_state.current_song = worship_songs[next_index]
+                st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.info("Select a song to begin listening")
+
 # Daily Devotional page
 @require_auth
 def daily_devotional_page():
     st.markdown('<h1 class="sub-header">📅 Daily Devotional</h1>', unsafe_allow_html=True)
     
-    # Display random verse
     verse_text, reference = get_random_verse()
     st.markdown(f'<div class="bible-verse"><h3>Verse of the Day ({reference})</h3><p>{verse_text}</p></div>', unsafe_allow_html=True)
     
-    # Reflection questions
     st.subheader("Reflection Questions")
     st.write("1. What does this verse mean to you personally?")
     st.write("2. How can you apply this verse in your life today?")
     st.write("3. What is God trying to tell you through this scripture?")
     
-    # Journaling space
     st.subheader("Journal Your Thoughts")
     journal_entry = st.text_area("Write your reflections here:", height=150, key="devotional_journal")
     
@@ -21,14 +154,28 @@ def daily_devotional_page():
     with col1:
         if st.button("💾 Save Reflection"):
             if journal_entry:
-                st.success("Your reflection has been saved!")
+                # Save to Supabase if available
+                try:
+                    if supabase_client:
+                        supabase_client.table("devotionals").insert({
+                            "user_id": st.session_state.user.id,
+                            "verse_text": verse_text,
+                            "reference": reference,
+                            "reflection": journal_entry,
+                            "date": datetime.now().isoformat()
+                        }).execute()
+                        st.success("Your reflection has been saved!")
+                    else:
+                        st.success("Your reflection has been saved! (Demo mode)")
+                except Exception as e:
+                    st.error(f"Error saving reflection: {str(e)}")
             else:
                 st.warning("Please write something before saving.")
     with col2:
         if st.button("🔄 New Verse"):
             st.rerun()
 
-# Study Hub page with WAEC integration
+# Study Hub page
 @require_auth
 def study_hub_page():
     st.markdown('<h1 class="sub-header">📚 Study Hub</h1>', unsafe_allow_html=True)
@@ -59,7 +206,6 @@ def study_hub_page():
                 
                 st.markdown(f'<div class="waec-question"><h3>Question {st.session_state.current_question + 1}</h3><p>{q["question"]}</p></div>', unsafe_allow_html=True)
                 
-                # Display options
                 selected_option = st.radio("Select your answer:", q['options'], key=f"waec_{st.session_state.current_question}")
                 
                 if st.button("Check Answer"):
@@ -70,6 +216,18 @@ def study_hub_page():
                 if st.session_state.get('show_answer', False):
                     if st.session_state.selected_option == q['answer']:
                         st.success("✅ Correct!")
+                        # Save progress to Supabase
+                        try:
+                            if supabase_client:
+                                supabase_client.table("study_progress").upsert({
+                                    "user_id": st.session_state.user.id,
+                                    "subject": st.session_state.waec_subject,
+                                    "correct_answers": 1,
+                                    "total_questions": 1,
+                                    "last_updated": datetime.now().isoformat()
+                                }).execute()
+                        except:
+                            pass
                     else:
                         st.error(f"❌ Incorrect. The correct answer is: {q['answer']}")
                     
@@ -108,9 +266,9 @@ def study_hub_page():
         
         st.write("Track your progress across different subjects:")
         
-        subjects = get_waec_subjects()[:5]  # Show first 5 subjects
+        subjects = get_waec_subjects()[:3]
         for subject in subjects:
-            progress = random.randint(10, 100)  # Simulated progress
+            progress = random.randint(10, 100)
             st.write(f"**{subject}**")
             st.progress(progress)
             st.caption(f"{progress}% complete")
@@ -248,7 +406,7 @@ def chat_page():
     with tab1:
         st.subheader("Chat with Friends")
         
-        # SEARCH FUNCTIONALITY ADDED HERE
+        # SEARCH FUNCTIONALITY
         search_term = st.text_input("🔍 Search users by name or code", key="user_search")
         
         # Get users for chatting
@@ -320,7 +478,7 @@ def chat_page():
     with tab2:
         st.subheader("Study Groups")
         
-        # SEARCH FOR GROUPS TOO!
+        # SEARCH FOR GROUPS
         group_search = st.text_input("🔍 Search groups by name or subject", key="group_search")
         
         # Get study groups
@@ -345,7 +503,7 @@ def chat_page():
                     st.success(f"You've joined {group['name']}!")
                 if st.button("View Chat", key=f"view_{group['id']}"):
                     st.session_state.current_chat = group['id']
-                    st.session_state.chat_messages = get_chat_messages(group['id'], "group")
+                    st.session_state.chat_messages = get_chat_messages(group['id'])
                     st.rerun()
     
     with tab3:
@@ -375,6 +533,7 @@ def profile_page():
         st.subheader("Profile Info")
         st.write(f"**Username:** {st.session_state.profile.get('username', 'N/A')}")
         st.write(f"**Your Code:** #{st.session_state.profile.get('number', '0000')}")
+        st.write(f"**Email:** {st.session_state.profile.get('email', 'N/A')}")
         
         st.divider()
         
@@ -384,6 +543,16 @@ def profile_page():
         if st.button("Update Profile"):
             # Update in session state
             st.session_state.profile['username'] = new_username
+            
+            # Update in Supabase if available
+            try:
+                if supabase_client:
+                    supabase_client.table("profiles").update({
+                        "username": new_username
+                    }).eq("id", st.session_state.user.id).execute()
+            except:
+                pass
+            
             st.success("Profile updated successfully!")
     
     with col2:
