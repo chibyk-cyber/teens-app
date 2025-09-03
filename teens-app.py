@@ -879,7 +879,7 @@ def study_hub_page():
             if st.session_state.current_question < len(st.session_state.waec_questions):
                 q = st.session_state.waec_questions[st.session_state.current_question]
                 
-                st.markdown(f'<div class="waec-question"><h3>Question {st.session_state.current_question + 1}</h3><p>{q["question"]</p></div>', unsafe_allow_html=True)
+                                st.markdown(f'<div class="waec-question"><h3>Question {st.session_state.current_question + 1}</h3><p>{q["question"]</p></div>'},unsafe_allow_html=True)
                 
                 selected_option = st.radio("Select your answer:", q['options'], key
 
@@ -1282,3 +1282,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
