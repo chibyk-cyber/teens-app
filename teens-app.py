@@ -666,4 +666,5 @@ def home_page():
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("📖 Bible Verse of the Day")
         verse_text, reference = get_random_verse()
-        st.markdown(f'<div class="bible-verse"><p>{verse
+        st.markdown(f'<div class="bible-verse"><p>{verse}
+
